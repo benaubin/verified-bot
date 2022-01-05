@@ -1,0 +1,12 @@
+[package]
+name = "utv-bot"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+serenity = { version="0.10", default-features = false, features = [ "builder", "client", "gateway", "rustls_backend", "http", "utils", "model", "unstable_discord_api"] }
+jwt = "0.15.0"
+reqwest = { version = "0.11", features = ["json"] }
