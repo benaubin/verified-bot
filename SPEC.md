@@ -59,6 +59,8 @@ If the user confirms authorization, we store their eid, service id, and public d
 
 If the user blocks authorization, we store ONLY their eid in order to prevent future verification emails.
 
+After confirm or block, we redirect the user to the redirect url. If there was an error (such as verification was blocked), we append a the query string `failure=[reason]` to the redirect url. This can be used to take an action upon successful or failed verification.
+
 ### GET /lookup.cgi?service=discord&service_id=[discord id]
 
 Publicly accessible API, to look up basic directory info from our sqlite database.
