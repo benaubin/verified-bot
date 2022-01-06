@@ -73,7 +73,6 @@ fn main() {
     match send_mail(&person.name, &email, &token) {
         Ok(_) => {
             println!("Status: 204 No Response");
-            eprintln!("{}", token);
         }
         Err(err) => {
             println!("Status: 500 Internal Server Error");
