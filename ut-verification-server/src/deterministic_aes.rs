@@ -8,36 +8,26 @@
 //!
 //! let msg = b"bha366";
 //! let encrypted = encrypt(msg, &key);
-//! let decrypted = decrypt(&*encrypted, &key);
+//! let decrypted = decrypt(&*encrypted, &key).unwrap();
 //!
 //! assert_eq!(msg, &*decrypted);
 //! ```
 //!
 
-use aes_gcm::{aead::Aead, Aes256Gcm, NewAead};
-use ring::hmac;
+use aes_gcm_siv::{aead::{Aead, NewAead}, Aes256GcmSiv, Nonce};
 
 pub fn encrypt(msg: &[u8], key: &[u8]) -> Vec<u8> {
-    // Based on the activerecord deterministic encryption algorithm
-    // https://github.com/rails/rails/blob/main/activerecord/lib/active_record/encryption/cipher/aes256_gcm.rb
-    let aes_key = aes_gcm::Key::from_slice(&key[..]);
-    let cipher = Aes256Gcm::new(aes_key);
-
-    let hmac_key = hmac::Key::new(ring::hmac::HMAC_SHA256, key);
-    let hmac_tag = hmac::sign(&hmac_key, msg);
-    let nonce = aes_gcm::Nonce::from_slice(&hmac_tag.as_ref()[0..12]);
-
-    let mut ciphertext = cipher.encrypt(nonce, msg).unwrap();
-    ciphertext.extend_from_slice(nonce);
-    ciphertext
+    let aes_key = aes_gcm_siv::Key::from_slice(&key[..]);
+    let cipher = Aes256GcmSiv::new(aes_key);
+    let nonce = Nonce::from_slice(&[0; 12]);
+    cipher.encrypt(nonce, msg).unwrap()
 }
 
-pub fn decrypt(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
-    let aes_key = aes_gcm::Key::from_slice(&key[..]);
-    let cipher = Aes256Gcm::new(aes_key);
-    let (ciphertext, nonce) = ciphertext.split_at(ciphertext.len() - 12);
-    let nonce = aes_gcm::Nonce::from_slice(nonce);
-    cipher.decrypt(nonce, ciphertext)
+pub fn decrypt(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, ()> {
+    let aes_key = aes_gcm_siv::Key::from_slice(&key[..]);
+    let cipher = Aes256GcmSiv::new(aes_key);
+    let nonce = Nonce::from_slice(&[0; 12]);
+    cipher.decrypt(nonce, ciphertext).map_err(|_| ())
 }
 
 #[cfg(test)]
@@ -52,7 +42,7 @@ mod test {
             let msg: [u8; 7] = rand::random();
             let encrypted = encrypt(&msg, &key);
 
-            let decrypted = decrypt(&*encrypted, &key);
+            let decrypted = decrypt(&*encrypted, &key).unwrap();
 
             assert_eq!(msg, &*decrypted);
         }
