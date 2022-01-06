@@ -1,6 +1,6 @@
-use utv_token::VerifiedClaims;
-use ldap3::{LdapConn, Scope, SearchEntry};
 use super::deterministic_aes;
+use ldap3::{LdapConn, Scope, SearchEntry};
+use utv_token::VerifiedClaims;
 
 #[derive(Debug)]
 pub struct Person {
@@ -66,12 +66,11 @@ impl Person {
     }
 }
 
-
 #[derive(Debug)]
 pub enum LookupError {
     MissingDirectoryInfo(&'static str),
     NotFound,
-    LdapError(ldap3::LdapError)
+    LdapError(ldap3::LdapError),
 }
 
 impl From<ldap3::LdapError> for LookupError {

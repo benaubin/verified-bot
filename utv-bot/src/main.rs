@@ -124,7 +124,6 @@ impl EventHandler for Handler {
                                 .kind(InteractionResponseType::ChannelMessageWithSource)
                                 .interaction_response_data(|message| {
                                     message.create_embed(|embed| match command.data.name.as_str() {
-                                        "help" => handlers::help(embed, &command),
                                         _ => handlers::unknown_command(embed, &command),
                                     })
                                 })
