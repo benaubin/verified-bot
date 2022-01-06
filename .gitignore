@@ -1,4 +1,4 @@
 .DS_Store
 /target
-
+/utv-bot/user_db
 .env

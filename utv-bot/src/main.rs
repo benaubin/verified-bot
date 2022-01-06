@@ -35,9 +35,15 @@ use serenity::{
     },
     prelude::*,
 };
+use sled::IVec;
 
 lazy_static! {
     static ref USERDB: sled::Db = sled::open("user_db").unwrap();
+    static ref SHARED_KEY: Vec<u8> = {
+        let key = std::env::var("SHARED_KEY").expect("SHARED_KEY env variable missing");
+        base64::decode_config(key, base64::URL_SAFE_NO_PAD)
+            .expect("Failed to decode base64 SHARED_KEY")
+    };
 }
 
 struct Handler;
@@ -81,9 +87,27 @@ impl EventHandler for Handler {
         }
     }
 
+    /// Handling token received in DM's
     async fn message(&self, ctx: Context, new_message: Message) {
         if let None = new_message.guild_id {
-            println!("Received msg: {}", new_message.content);
+            let token = new_message.content.as_str();
+            if let Ok(data) = utv_token::decode_token(token, &SHARED_KEY) {
+                let key: u64 = new_message.author.id.into();
+                let key = key.to_be_bytes().to_vec();
+                new_message.reply(
+                    &ctx.http,
+                    match USERDB.get(&key) {
+                        Ok(Some(_)) => "This Discord account has already been associated with a UT EID. Please contact `support@verifiedbot.com` if you believe this is a mistake.",
+                        Ok(None) => {
+                            USERDB
+                                .insert(key, serde_json::to_vec(&data).expect("Failed to save verified user (Encoding error)"))
+                                .expect("Failed to save verified user (DB error)");
+                            "You've been verified! Please check participating servers to see a check mark next to your name!"
+                        }
+                        Err(_) => "Oh Snap! Something went wrong on our side. Please try again later."
+                    }
+                ).await;
+            }
         }
     }
 
@@ -128,40 +152,22 @@ impl EventHandler for Handler {
             if let Err(why) = match command.data.name.as_str() {
                 "verify" => handlers::verify(command, ctx).await,
                 "rescan" => match command.guild_id {
-                    Some(guild) => {
-                        let mut success = false;
-                        if let Some(true) = command
-                            .member
-                            .and_then(|m| m.permissions)
-                            .and_then(|p| Some(p.administrator()))
-                        {
-                            success = handlers::scan(guild, ctx).await.is_ok();
-                        }
-                        command.create_interaction_response(&ctx.http, |response| {
-                            response
-                                .kind(InteractionResponseType::ChannelMessageWithSource)
-                                .interaction_response_data(|message| {
-                                    message.create_embed(|embed| {
-                                        embed.title(if success {
-                                            "Successfully Scanned Server"
-                                        } else {
-                                            "Scan Failed. Are you the Admin?"
+                    Some(guild) => handlers::scan(guild, ctx).await,
+                    None => {
+                        command
+                            .create_interaction_response(&ctx.http, |response| {
+                                response
+                                    .kind(InteractionResponseType::ChannelMessageWithSource)
+                                    .interaction_response_data(|message| {
+                                        message.create_embed(|embed| {
+                                            embed.title(
+                                            "This command must be run inside of a guild, not a DM.",
+                                        )
                                         })
                                     })
-                                })
-                        })
-                    }
-                    None => command.create_interaction_response(&ctx.http, |response| {
-                        response
-                            .kind(InteractionResponseType::ChannelMessageWithSource)
-                            .interaction_response_data(|message| {
-                                message.create_embed(|embed| {
-                                    embed.title(
-                                        "This command must be run inside of a guild, not a DM.",
-                                    )
-                                })
                             })
-                    }),
+                            .await
+                    }
                 },
                 _ => {
                     command

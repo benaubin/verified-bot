@@ -39,6 +39,7 @@ pub fn help<'a>(
         .field(
             "`/rescan`",
             "**ADMIN-ONLY**: checks all users in this guild for nickname compliance",
+            false,
         )
 }
 

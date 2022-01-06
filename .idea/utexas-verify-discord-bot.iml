@@ -7,6 +7,7 @@
       <sourceFolder url="file://$MODULE_DIR$/ut-verification-server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ut-verification-token/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/utv-bot/user_db" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
