@@ -7,10 +7,7 @@ use serenity::{
     utils::Color,
 };
 
-pub async fn utverify(
-    command: ApplicationCommandInteraction,
-    ctx: Context,
-) -> serenity::Result<()> {
+pub async fn verify(command: ApplicationCommandInteraction, ctx: Context) -> serenity::Result<()> {
     command
         .create_interaction_response(ctx.http, |response| {
             response
@@ -20,7 +17,7 @@ pub async fn utverify(
         .await
 }
 
-pub fn utvhelp<'a>(
+pub fn help<'a>(
     embed: &'a mut CreateEmbed,
     _command: &ApplicationCommandInteraction,
 ) -> &'a mut CreateEmbed {
