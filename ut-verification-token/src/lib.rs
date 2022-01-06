@@ -10,9 +10,8 @@ pub struct VerifiedClaims {
     pub affiliation: Vec<String>
 }
 
-
-pub fn encode_token(claims: VerifiedClaims, shared_key: &[u8]) -> String {
-    let mut data = rmp_serde::to_vec(&claims).unwrap();
+pub fn encode_token(claims: &VerifiedClaims, shared_key: &[u8]) -> String {
+    let mut data = rmp_serde::to_vec(claims).unwrap();
 
     let hmac_key = hmac::Key::new(ring::hmac::HMAC_SHA256, shared_key);
     let hmac_tag = hmac::sign(&hmac_key, &data[..]);

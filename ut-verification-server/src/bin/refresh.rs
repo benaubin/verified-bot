@@ -1,6 +1,10 @@
 use utv_server::directory::{Person, LookupError};
 use utv_server::deterministic_aes;
 
+use serde::Serialize;
+use serde_json;
+use utv_token::VerifiedClaims;
+
 fn main() {
     let encryption_key = std::env::var("SHARED_KEY").expect("Missing ENCRYPTION_KEY");
     let encryption_key = base64::decode_config(encryption_key, base64::URL_SAFE_NO_PAD).expect("Invalid ENCRYPTION_KEY");
@@ -59,10 +63,20 @@ fn main() {
         }
     };
 
-    let new_token = utv_token::encode_token(person.claims, &shared_key);
+    let new_token = utv_token::encode_token(&person.claims, &shared_key);
+
 
     println!("Status: 200 OK");
-    println!("Content-Type: text/plain;charset=UTF-8");
+    println!("Content-Type: application/json;charset=UTF-8");
     println!();
-    println!("{}", new_token);
+    serde_json::to_writer(std::io::stdout(), &Response {
+        token: new_token,
+        claims: person.claims
+    }).unwrap();
+}
+
+#[derive(Serialize)]
+struct Response {
+    token: String,
+    claims: VerifiedClaims
 }

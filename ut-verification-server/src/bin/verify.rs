@@ -41,7 +41,7 @@ fn main() {
                 ],
                 "dynamic_template_data": {
                     "name": person.name,
-                    "token": utv_token::encode_token(person.claims, &shared_key)
+                    "token": utv_token::encode_token(&person.claims, &shared_key)
                 }
             }
         ],
