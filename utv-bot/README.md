@@ -19,8 +19,11 @@ existing `✓`'s replaced with `_`.
  * Manage Members: allows modification of nicknames
 
 ### Commands
-`/verify eid:str`
+`/verify eid:str`:
 The user enters their EID and an email will be sent to the address they have on file in the UT Directory.
 They will receive a token in the email which they must DM to this bot to finish connecting their account.
+
+`/rescan`:
+**ADMIN-ONLY COMMAND**; checks all members of the guild for nickname compliance as if the bot had just joined the guild.
 
 `/help`

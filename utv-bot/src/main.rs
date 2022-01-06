@@ -3,6 +3,7 @@ mod handlers;
 use std::collections::HashMap;
 use std::{char, env};
 
+use lazy_static::lazy_static;
 use serenity::client::bridge::gateway::event::ShardStageUpdateEvent;
 use serenity::model::channel::{
     Channel, ChannelCategory, GuildChannel, Message, PartialGuildChannel, Reaction, StageInstance,
@@ -35,10 +36,14 @@ use serenity::{
     prelude::*,
 };
 
+lazy_static! {
+    static ref USERDB: sled::Db = sled::open("user_db").unwrap();
+}
+
 struct Handler;
 
+/// Modifies the name of the user to either sanitize it or assign it the ✓
 async fn modify_name(ctx: &Context, mem: &mut Member) {
-    /// Modifies the name of the user to either sanitize it or assign it the ✓
     mem.edit(&ctx.http, |m| m.nickname("Testing"))
         .await
         .expect("Failed to set display name of user");
@@ -104,6 +109,11 @@ impl EventHandler for Handler {
                         .name("help")
                         .description("Learn more about the bot and its commands")
                 })
+                .create_application_command(|command| {
+                    command
+                        .name("rescan")
+                        .description("Check all users in the guild for nickname compliance")
+                })
         })
         .await;
 
@@ -117,6 +127,42 @@ impl EventHandler for Handler {
         if let Interaction::ApplicationCommand(command) = interaction {
             if let Err(why) = match command.data.name.as_str() {
                 "verify" => handlers::verify(command, ctx).await,
+                "rescan" => match command.guild_id {
+                    Some(guild) => {
+                        let mut success = false;
+                        if let Some(true) = command
+                            .member
+                            .and_then(|m| m.permissions)
+                            .and_then(|p| Some(p.administrator()))
+                        {
+                            success = handlers::scan(guild, ctx).await.is_ok();
+                        }
+                        command.create_interaction_response(&ctx.http, |response| {
+                            response
+                                .kind(InteractionResponseType::ChannelMessageWithSource)
+                                .interaction_response_data(|message| {
+                                    message.create_embed(|embed| {
+                                        embed.title(if success {
+                                            "Successfully Scanned Server"
+                                        } else {
+                                            "Scan Failed. Are you the Admin?"
+                                        })
+                                    })
+                                })
+                        })
+                    }
+                    None => command.create_interaction_response(&ctx.http, |response| {
+                        response
+                            .kind(InteractionResponseType::ChannelMessageWithSource)
+                            .interaction_response_data(|message| {
+                                message.create_embed(|embed| {
+                                    embed.title(
+                                        "This command must be run inside of a guild, not a DM.",
+                                    )
+                                })
+                            })
+                    }),
+                },
                 _ => {
                     command
                         .create_interaction_response(&ctx.http, |response| {

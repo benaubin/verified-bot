@@ -1,3 +1,4 @@
+use serenity::model::prelude::{Guild, GuildId, Message};
 use serenity::{
     builder::CreateEmbed,
     client::Context,
@@ -17,6 +18,12 @@ pub async fn verify(command: ApplicationCommandInteraction, ctx: Context) -> ser
         .await
 }
 
+/// Scans all users in the guild to check nickname compliance
+pub async fn scan(guild: GuildId, ctx: Context) -> serenity::Result<()> {
+    let guild = ctx.http.get_guild(guild.into()).await?;
+    todo!()
+}
+
 pub fn help<'a>(
     embed: &'a mut CreateEmbed,
     _command: &ApplicationCommandInteraction,
@@ -24,7 +31,15 @@ pub fn help<'a>(
     embed
         .title("UTexas Verify Help Page")
         .color(Color::from_rgb(0, 255, 0))
-        .description("Use the `/utverify` command to verify your discord account...")
+        .field(
+            "`/verify`",
+            "Connect your UT EID to your discord account",
+            false,
+        )
+        .field(
+            "`/rescan`",
+            "**ADMIN-ONLY**: checks all users in this guild for nickname compliance",
+        )
 }
 
 pub fn unknown_command<'a>(
@@ -33,6 +48,6 @@ pub fn unknown_command<'a>(
 ) -> &'a mut CreateEmbed {
     embed
         .title("Incorrect Command Usage")
-        .description("Use one of 2 commands: `utverify`, `utvhelp`, and make sure your input values are valid.")
+        .description("Use one of 3 commands: `/verify`, `/help`, `/rescan`, and make sure your input values are valid.")
         .color(Color::from_rgb(255, 0, 0))
 }
