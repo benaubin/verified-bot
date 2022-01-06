@@ -47,7 +47,6 @@ fn send_mail(name: &str, email: &str, token: &str) -> Result<(), SmtpError> {
 fn main() {
     let shared_key = std::env::var("SHARED_KEY").expect("Missing SHARED_KEY");
     let encryption_key = std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY");
-
     let shared_key =
         base64::decode_config(shared_key, base64::URL_SAFE_NO_PAD).expect("Invalid ENCRYPTION_KEY");
     let encryption_key = base64::decode_config(encryption_key, base64::URL_SAFE_NO_PAD)
@@ -69,12 +68,9 @@ fn main() {
     };
 
     let email = format!("{}@eid.utexas.edu", eid.trim());
-
     let token = utv_token::encode_token(&person.claims, &shared_key);
 
-    let result = send_mail(&person.name, &person.email, &token);
-
-    match result {
+    match send_mail(&person.name, &email, &token) {
         Ok(_) => {
             println!("Status: 204 No Response");
             eprintln!("{}", token);
