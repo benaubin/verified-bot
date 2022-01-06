@@ -6,7 +6,7 @@ use serde_json;
 use utv_token::VerifiedClaims;
 
 fn main() {
-    let encryption_key = std::env::var("SHARED_KEY").expect("Missing ENCRYPTION_KEY");
+    let encryption_key = std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY");
     let encryption_key = base64::decode_config(encryption_key, base64::URL_SAFE_NO_PAD)
         .expect("Invalid ENCRYPTION_KEY");
     let shared_key = std::env::var("SHARED_KEY").expect("Missing SHARED_KEY");
