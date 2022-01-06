@@ -1,13 +1,13 @@
 use ring::hmac;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct VerifiedClaims {
     pub encrypted_eid: Vec<u8>,
     pub major: Vec<String>,
     pub school: Vec<String>,
-    pub affiliation: Vec<String>
+    pub affiliation: Vec<String>,
 }
 
 pub fn encode_token(claims: &VerifiedClaims, shared_key: &[u8]) -> String {
@@ -23,9 +23,9 @@ pub fn encode_token(claims: &VerifiedClaims, shared_key: &[u8]) -> String {
 
 #[derive(Debug)]
 pub enum DecodeError {
-  InvalidBase64(base64::DecodeError),
-  InvalidMsgPack(rmp_serde::decode::Error),
-  BadHmac
+    InvalidBase64(base64::DecodeError),
+    InvalidMsgPack(rmp_serde::decode::Error),
+    BadHmac,
 }
 
 impl From<base64::DecodeError> for DecodeError {

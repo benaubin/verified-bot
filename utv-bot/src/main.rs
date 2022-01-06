@@ -1,17 +1,19 @@
 mod handlers;
 
-use std::{env, char};
+use std::{char, env};
 
 use serenity::{
     async_trait,
+    client::bridge::gateway::GatewayIntents,
     model::{
+        event::GuildMemberUpdateEvent,
         gateway::Ready,
         interactions::{
             application_command::{ApplicationCommand, ApplicationCommandOptionType},
             Interaction, InteractionResponseType,
-        }, event::GuildMemberUpdateEvent,
+        },
     },
-    prelude::*, client::bridge::gateway::GatewayIntents,
+    prelude::*,
 };
 
 struct Handler;
@@ -46,10 +48,15 @@ impl EventHandler for Handler {
         if let Some(new_nick) = update.nick {
             // using special characters so set it to their uname
             if !new_nick.chars().all(|c| char::is_ascii(&c)) {
-                if let Ok(member) = ctx.http.get_member(update.guild_id.into(), update.user.id.into()).await {
-                    member.edit(ctx.http, |edit| {
-                        edit.nickname(update.user.name)
-                    }).await.unwrap();
+                if let Ok(member) = ctx
+                    .http
+                    .get_member(update.guild_id.into(), update.user.id.into())
+                    .await
+                {
+                    member
+                        .edit(ctx.http, |edit| edit.nickname(update.user.name))
+                        .await
+                        .unwrap();
                 }
             }
         }

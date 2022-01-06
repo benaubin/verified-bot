@@ -1,20 +1,20 @@
 //! Deterministic aes-gcm aead encryption
-//! 
+//!
 //! Based on ActiveRecord's strategy of using an hmac digest of
 //! the encrypted plaintext as the encryption nonce.
-//! 
+//!
 //! ```
 //! let key: [u8; 32] = rand::random();
-//! 
+//!
 //! let msg = b"bha366";
 //! let encrypted = encrypt(msg, &key);
 //! let decrypted = decrypt(&*encrypted, &key);
-//! 
+//!
 //! assert_eq!(msg, &*decrypted);
 //! ```
 //!
 
-use aes_gcm::{NewAead, aead::Aead, Aes256Gcm};
+use aes_gcm::{aead::Aead, Aes256Gcm, NewAead};
 use ring::hmac;
 
 pub fn encrypt(msg: &[u8], key: &[u8]) -> Vec<u8> {
@@ -33,28 +33,28 @@ pub fn encrypt(msg: &[u8], key: &[u8]) -> Vec<u8> {
 }
 
 pub fn decrypt(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
-  let aes_key = aes_gcm::Key::from_slice(&key[..]);
-  let cipher = Aes256Gcm::new(aes_key);
-  let (ciphertext, nonce) = ciphertext.split_at(ciphertext.len() - 12);
-  let nonce = aes_gcm::Nonce::from_slice(nonce);
-  cipher.decrypt(nonce, ciphertext)
+    let aes_key = aes_gcm::Key::from_slice(&key[..]);
+    let cipher = Aes256Gcm::new(aes_key);
+    let (ciphertext, nonce) = ciphertext.split_at(ciphertext.len() - 12);
+    let nonce = aes_gcm::Nonce::from_slice(nonce);
+    cipher.decrypt(nonce, ciphertext)
 }
 
 #[cfg(test)]
 mod test {
-  use super::*;
+    use super::*;
 
-  #[test]
-  fn with_random_msg() {
-    let key: [u8; 32] = rand::random();
+    #[test]
+    fn with_random_msg() {
+        let key: [u8; 32] = rand::random();
 
-    for _ in 0..10 {
-      let msg: [u8; 7] = rand::random();
-      let encrypted = encrypt(&msg, &key);
+        for _ in 0..10 {
+            let msg: [u8; 7] = rand::random();
+            let encrypted = encrypt(&msg, &key);
 
-      let decrypted = decrypt(&*encrypted, &key);
+            let decrypted = decrypt(&*encrypted, &key);
 
-      assert_eq!(msg, &*decrypted);
+            assert_eq!(msg, &*decrypted);
+        }
     }
-  }
 }
