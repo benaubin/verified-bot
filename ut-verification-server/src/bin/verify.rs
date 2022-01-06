@@ -26,6 +26,8 @@ fn main() {
         }
     };
 
+    let email = format!("{}@eid.utexas.edu", eid.trim());
+
     let req = serde_json::json!({
         "from": {
             "email": "no-reply@verifiedbot.com"
@@ -34,7 +36,7 @@ fn main() {
             {
                 "to": [
                     {
-                        "email": format!("{}@eid.utexas.edu", eid)
+                        "email": email
                     }
                 ],
                 "dynamic_template_data": {
