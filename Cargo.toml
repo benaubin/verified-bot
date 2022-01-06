@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
-    "utdir-ldap-processor",
-    "utv-bot",
+    "ut-verification-token",
+    "ut-verification-server",
+    "utv-bot"
 ]

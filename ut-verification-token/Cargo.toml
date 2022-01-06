@@ -1,9 +1,12 @@
 [package]
-name = "utdir-ldap-processor"
+name = "utv_token"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ldap3 = "0.9"
+serde = {version = "1.0", features = ["derive"] }
+ring = "0.16.20"
+base64 = "0.13.0"
+rmp-serde = "0.15.5"
