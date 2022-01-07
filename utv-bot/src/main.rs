@@ -6,6 +6,8 @@ use std::{char, env};
 use lazy_static::lazy_static;
 use serde_json::Value;
 use serenity::client::bridge::gateway::event::ShardStageUpdateEvent;
+use serenity::futures::TryFutureExt;
+use serenity::http::{CacheHttp, GuildPagination};
 use serenity::model::channel::{
     Channel, ChannelCategory, GuildChannel, Message, PartialGuildChannel, Reaction, StageInstance,
 };
@@ -21,6 +23,7 @@ use serenity::model::guild::{
 use serenity::model::id::{
     ApplicationId, ChannelId, EmojiId, GuildId, IntegrationId, MessageId, RoleId,
 };
+use serenity::model::prelude::application_command::ApplicationCommandInteraction;
 use serenity::model::prelude::{CurrentUser, User, VoiceState};
 use serenity::utils::Color;
 use serenity::{
@@ -36,9 +39,6 @@ use serenity::{
     },
     prelude::*,
 };
-use serenity::futures::TryFutureExt;
-use serenity::http::{CacheHttp, GuildPagination};
-use serenity::model::prelude::application_command::ApplicationCommandInteraction;
 use sled::IVec;
 use tokio::select_priv_declare_output_enum;
 
@@ -55,33 +55,44 @@ lazy_static! {
 struct Handler;
 
 /// Scans all users in the guild to check nickname compliance
-async fn scan(command: ApplicationCommandInteraction, guild: GuildId, ctx: Context) -> serenity::Result<()> {
-    if !command.member.as_ref().unwrap().permissions.unwrap().administrator() {
-        return command.create_interaction_response(&ctx.http, |interaction| {
-            interaction
-                .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|message| {
-                    message.create_embed(|embed| {
-                        embed
-                            .title("You must be a guild admin to run this command.")
+async fn scan(
+    command: ApplicationCommandInteraction,
+    guild: GuildId,
+    ctx: Context,
+) -> serenity::Result<()> {
+    if !command
+        .member
+        .as_ref()
+        .unwrap()
+        .permissions
+        .unwrap()
+        .administrator()
+    {
+        return command
+            .create_interaction_response(&ctx.http, |interaction| {
+                interaction
+                    .kind(InteractionResponseType::ChannelMessageWithSource)
+                    .interaction_response_data(|message| {
+                        message.create_embed(|embed| {
+                            embed.title("You must be a guild admin to run this command.")
+                        })
                     })
-                })
-        }).await;
+            })
+            .await;
     }
     let guild = ctx.http.get_guild(guild.into()).await?;
     for mut member in guild.members(&ctx.http, None, None).await? {
         handle_member_status(&ctx, &mut member).await;
     }
-    command.create_interaction_response(&ctx.http, |interaction| {
-        interaction
-            .kind(InteractionResponseType::ChannelMessageWithSource)
-            .interaction_response_data(|message| {
-                message.create_embed(|embed| {
-                    embed
-                        .title("Command Completed")
+    command
+        .create_interaction_response(&ctx.http, |interaction| {
+            interaction
+                .kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|message| {
+                    message.create_embed(|embed| embed.title("Command Completed"))
                 })
-            })
-    }).await
+        })
+        .await
 }
 
 /// Modifies the name and roles of the user to either sanitize it or assign it the ✓
@@ -117,18 +128,24 @@ async fn get_verified_role<'a>(ctx: &'a Context, guild: &'a PartialGuild) -> &'a
     let key: Vec<u8> = key.to_be_bytes().to_vec();
     let role_id = match ROLEDB.get(&key).unwrap() {
         Some(value) => {
-            let role_id = RoleId(u64::from_be_bytes(value.to_vec().as_slice().try_into().unwrap()));
+            let role_id = RoleId(u64::from_be_bytes(
+                value.to_vec().as_slice().try_into().unwrap(),
+            ));
             guild.roles.get(&role_id).unwrap().id
-        },
+        }
         None => {
-            let new_role = guild.create_role(&ctx.http, |r| {
-                r
-                    .name("UTexas Verified")
-                    .hoist(true)
-                    .mentionable(true)
-                    .colour(0xbf5700)
-            }).await.unwrap();
-            ROLEDB.insert(key, new_role.id.as_u64().to_be_bytes().to_vec()).unwrap();
+            let new_role = guild
+                .create_role(&ctx.http, |r| {
+                    r.name("UTexas Verified")
+                        .hoist(true)
+                        .mentionable(true)
+                        .colour(0xbf5700)
+                })
+                .await
+                .unwrap();
+            ROLEDB
+                .insert(key, new_role.id.as_u64().to_be_bytes().to_vec())
+                .unwrap();
             new_role.id
         }
     };
@@ -191,14 +208,18 @@ impl EventHandler for Handler {
                         }
                         Err(_) => "Oh Snap! Something went wrong on our side. Please try again later."
                     }
-                ).await;
+                ).await.unwrap();
             }
         }
     }
 
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
-        ctx.set_activity(Activity::watching(format!("{} verified students", USERDB.len()))).await;
+        ctx.set_activity(Activity::watching(format!(
+            "{} verified students",
+            USERDB.len()
+        )))
+        .await;
 
         let commands = ApplicationCommand::set_global_application_commands(&ctx.http, |commands| {
             commands

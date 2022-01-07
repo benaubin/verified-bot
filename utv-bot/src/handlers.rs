@@ -1,4 +1,8 @@
-use serenity::model::prelude::{Guild, GuildId, Message};
+use std::time::Duration;
+use serenity::model::prelude::application_command::ApplicationCommandInteractionDataOptionValue;
+use serenity::model::prelude::{
+    Guild, GuildId, InteractionApplicationCommandCallbackDataFlags, Message,
+};
 use serenity::{
     builder::CreateEmbed,
     client::Context,
@@ -9,11 +13,43 @@ use serenity::{
 };
 
 pub async fn verify(command: ApplicationCommandInteraction, ctx: Context) -> serenity::Result<()> {
+    let options = command
+        .data
+        .options
+        .get(0)
+        .expect("Expected EID")
+        .resolved
+        .as_ref()
+        .expect("Expected Value");
+    let mut res_ok = false;
+    if let ApplicationCommandInteractionDataOptionValue::String(eid) = options {
+        println!("Received EID: {}", eid);
+        let client = reqwest::Client::new();
+        let request_token =
+            std::env::var("REQUEST_TOKEN").expect("Expected REQUEST_TOKEN variable");
+        let mut eid = eid.clone();
+        eid.push('\n');
+        res_ok = client
+            .post(request_token)
+            .body(eid)
+            .send()
+            .await
+            .is_ok();
+        println!("Mail sent?: {}", res_ok);
+    }
     command
-        .create_interaction_response(ctx.http, |response| {
-            response
-                .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|msg| msg.create_embed(|embed| embed.title("Success")))
+        .create_interaction_response(&ctx.http, |interaction| {
+            interaction.interaction_response_data(|message| {
+                message
+                    .create_embed(|embed| {
+                        embed.title(if res_ok {
+                            "Token Verification Email Sent"
+                        } else {
+                            "Error: Please Check You Entered Your EID Correctly"
+                        })
+                    })
+                    .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+            })
         })
         .await
 }
