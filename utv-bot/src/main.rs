@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::{char, env};
 
 use lazy_static::lazy_static;
+use serde_json::Value;
 use serenity::client::bridge::gateway::event::ShardStageUpdateEvent;
 use serenity::model::channel::{
     Channel, ChannelCategory, GuildChannel, Message, PartialGuildChannel, Reaction, StageInstance,
@@ -13,7 +14,7 @@ use serenity::model::event::{
     MessageUpdateEvent, PresenceUpdateEvent, ResumedEvent, ThreadListSyncEvent,
     ThreadMembersUpdateEvent, TypingStartEvent, VoiceServerUpdateEvent,
 };
-use serenity::model::gateway::Presence;
+use serenity::model::gateway::{Activity, Presence};
 use serenity::model::guild::{
     Emoji, Guild, GuildUnavailable, Integration, Member, PartialGuild, Role, ThreadMember,
 };
@@ -35,13 +36,15 @@ use serenity::{
     },
     prelude::*,
 };
-use serenity::http::GuildPagination;
+use serenity::futures::TryFutureExt;
+use serenity::http::{CacheHttp, GuildPagination};
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
 use sled::IVec;
 use tokio::select_priv_declare_output_enum;
 
 lazy_static! {
     static ref USERDB: sled::Db = sled::open("user_db").unwrap();
+    static ref ROLEDB: sled::Db = sled::open("role_db").unwrap();
     static ref SHARED_KEY: Vec<u8> = {
         let key = std::env::var("SHARED_KEY").expect("SHARED_KEY env variable missing");
         base64::decode_config(key, base64::URL_SAFE_NO_PAD)
@@ -52,14 +55,22 @@ lazy_static! {
 struct Handler;
 
 /// Scans all users in the guild to check nickname compliance
-pub async fn scan(command: ApplicationCommandInteraction, guild: GuildId, ctx: Context) -> serenity::Result<()> {
-    // TODO: restrict command to admin
+async fn scan(command: ApplicationCommandInteraction, guild: GuildId, ctx: Context) -> serenity::Result<()> {
+    if !command.member.as_ref().unwrap().permissions.unwrap().administrator() {
+        return command.create_interaction_response(&ctx.http, |interaction| {
+            interaction
+                .kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|message| {
+                    message.create_embed(|embed| {
+                        embed
+                            .title("You must be a guild admin to run this command.")
+                    })
+                })
+        }).await;
+    }
     let guild = ctx.http.get_guild(guild.into()).await?;
-    let mut modified = 0;
     for mut member in guild.members(&ctx.http, None, None).await? {
-        if modify_name(&ctx, &mut member).await {
-            modified += 1;
-        }
+        handle_member_status(&ctx, &mut member).await;
     }
     command.create_interaction_response(&ctx.http, |interaction| {
         interaction
@@ -73,17 +84,24 @@ pub async fn scan(command: ApplicationCommandInteraction, guild: GuildId, ctx: C
     }).await
 }
 
-/// Modifies the name of the user to either sanitize it or assign it the ✓
-async fn modify_name(ctx: &Context, mem: &mut Member) -> bool {
+/// Modifies the name and roles of the user to either sanitize it or assign it the ✓
+async fn handle_member_status(ctx: &Context, mem: &mut Member) -> bool {
+    let guild = ctx.http.get_guild(mem.guild_id.into()).await.unwrap();
+    let verified_role = get_verified_role(&ctx, &guild).await;
     let key: u64 = mem.user.id.into();
     let key = key.to_be_bytes().to_vec();
     let original = mem.display_name().to_string();
-    if original.ends_with("✓") {
-        return false;
-    }
     let mut cleaned = mem.display_name().replace("✓", "_");
     if let Ok(Some(_)) = USERDB.get(key) {
-        cleaned.push_str(" ✓");
+        // verified
+        if !mem.roles.contains(&verified_role.id) {
+            mem.add_role(&ctx.http, verified_role.id).await.unwrap();
+        }
+        if !original.ends_with("✓") {
+            cleaned.push_str(" ✓");
+        } else {
+            return true;
+        }
     }
     if original != cleaned {
         mem.edit(&ctx.http, |m| m.nickname(cleaned)).await;
@@ -93,33 +111,48 @@ async fn modify_name(ctx: &Context, mem: &mut Member) -> bool {
     }
 }
 
+/// Gets the Verified Role and Creates it if needed
+async fn get_verified_role<'a>(ctx: &'a Context, guild: &'a PartialGuild) -> &'a Role {
+    let key: u64 = guild.id.into();
+    let key: Vec<u8> = key.to_be_bytes().to_vec();
+    let role_id = match ROLEDB.get(&key).unwrap() {
+        Some(value) => {
+            let role_id = RoleId(u64::from_be_bytes(value.to_vec().as_slice().try_into().unwrap()));
+            guild.roles.get(&role_id).unwrap().id
+        },
+        None => {
+            let new_role = guild.create_role(&ctx.http, |r| {
+                r
+                    .name("UTexas Verified")
+                    .hoist(true)
+                    .mentionable(true)
+                    .colour(0xbf5700)
+            }).await.unwrap();
+            ROLEDB.insert(key, new_role.id.as_u64().to_be_bytes().to_vec()).unwrap();
+            new_role.id
+        }
+    };
+    let role = guild.roles.get(&role_id).unwrap();
+    role
+}
+
 #[async_trait]
 impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild) {
-        // create UTexas Verified role
-        if let Ok(role) = guild
-            .create_role(&ctx.http, |r| r.hoist(true).name("UTexas Verified"))
-            .await
-        {
-            println!("Created role {}", role.name);
-        }
-        // assign roles and modify display names
-        for (uid, mut mem) in guild.members {
-            println!("{:?}: {}", uid, mem.display_name());
-            modify_name(&ctx, &mut mem).await;
+        for (_, mut member) in guild.members {
+            handle_member_status(&ctx, &mut member).await;
         }
     }
 
     async fn guild_member_addition(&self, ctx: Context, guild_id: GuildId, mut new_member: Member) {
-        modify_name(&ctx, &mut new_member).await;
+        handle_member_status(&ctx, &mut new_member).await;
     }
 
     async fn guild_member_update(&self, ctx: Context, update: GuildMemberUpdateEvent) {
         if let Some(new_nick) = update.nick {
-            // using special characters so set it to their uname
             if let Ok(guild) = ctx.http.get_guild(update.guild_id.into()).await {
                 if let Ok(mut member) = guild.member(&ctx.http, update.user.id).await {
-                    modify_name(&ctx, &mut member).await;
+                    handle_member_status(&ctx, &mut member).await;
                 }
             }
         }
@@ -140,12 +173,15 @@ impl EventHandler for Handler {
                             USERDB
                                 .insert(key, serde_json::to_vec(&data).expect("Failed to save verified user (Encoding error)"))
                                 .expect("Failed to save verified user (DB error)");
+                            ctx.set_activity(Activity::watching(format!("{} verified students", USERDB.len()))).await;
                             if let Ok(guildInfos) = ctx.http.get_guilds(&GuildPagination::After(GuildId(0)), 100).await {
                                 for guildInfo in guildInfos {
                                     if let Ok(guild) = ctx.http.get_guild(guildInfo.id.into()).await {
                                         if let Ok(members) = guild.members(&ctx.http, None, None).await {
                                             for mut mem in members {
-                                                modify_name(&ctx, &mut mem).await;
+                                                if mem.user.id == new_message.author.id {
+                                                    handle_member_status(&ctx, &mut mem).await;
+                                                }
                                             }
                                         }
                                     }
@@ -162,6 +198,7 @@ impl EventHandler for Handler {
 
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
+        ctx.set_activity(Activity::watching(format!("{} verified students", USERDB.len()))).await;
 
         let commands = ApplicationCommand::set_global_application_commands(&ctx.http, |commands| {
             commands
