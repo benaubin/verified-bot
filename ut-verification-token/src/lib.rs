@@ -22,31 +22,16 @@ pub fn encode_token(claims: &VerifiedClaims, shared_key: &[u8]) -> String {
 }
 
 #[derive(Debug)]
-pub enum DecodeError {
-    InvalidBase64(base64::DecodeError),
-    InvalidMsgPack(rmp_serde::decode::Error),
-    BadHmac,
-}
+pub struct InvalidToken;
 
-impl From<base64::DecodeError> for DecodeError {
-    fn from(err: base64::DecodeError) -> Self {
-        Self::InvalidBase64(err)
-    }
-}
-impl From<rmp_serde::decode::Error> for DecodeError {
-    fn from(err: rmp_serde::decode::Error) -> Self {
-        Self::InvalidMsgPack(err)
-    }
-}
-
-pub fn decode_token(token: &str, shared_key: &[u8]) -> Result<VerifiedClaims, DecodeError> {
+pub fn decode_token(token: &str, shared_key: &[u8]) -> Result<VerifiedClaims, InvalidToken> {
     let hmac_key = hmac::Key::new(ring::hmac::HMAC_SHA256, shared_key);
 
-    let data = base64::decode_config(token, base64::URL_SAFE_NO_PAD)?;
+    let data = base64::decode_config(token, base64::URL_SAFE_NO_PAD).map_err(|_| InvalidToken)?;
+    if data.len() <= 32 { return Err(InvalidToken) };
 
     let (claims_raw, hmac_tag) = data.split_at(data.len() - 32);
-    hmac::verify(&hmac_key, claims_raw, hmac_tag).map_err(|_| DecodeError::BadHmac)?;
+    hmac::verify(&hmac_key, claims_raw, hmac_tag).map_err(|_| InvalidToken)?;
 
-    let claims = rmp_serde::from_read(claims_raw)?;
-    Ok(claims)
+    rmp_serde::from_read(claims_raw).map_err(|_| InvalidToken)
 }
