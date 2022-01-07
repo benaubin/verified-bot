@@ -18,12 +18,6 @@ pub async fn verify(command: ApplicationCommandInteraction, ctx: Context) -> ser
         .await
 }
 
-/// Scans all users in the guild to check nickname compliance
-pub async fn scan(guild: GuildId, ctx: Context) -> serenity::Result<()> {
-    let guild = ctx.http.get_guild(guild.into()).await?;
-    todo!()
-}
-
 pub fn help<'a>(
     embed: &'a mut CreateEmbed,
     _command: &ApplicationCommandInteraction,

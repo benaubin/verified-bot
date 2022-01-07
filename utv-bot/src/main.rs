@@ -35,7 +35,10 @@ use serenity::{
     },
     prelude::*,
 };
+use serenity::http::GuildPagination;
+use serenity::model::prelude::application_command::ApplicationCommandInteraction;
 use sled::IVec;
+use tokio::select_priv_declare_output_enum;
 
 lazy_static! {
     static ref USERDB: sled::Db = sled::open("user_db").unwrap();
@@ -48,11 +51,46 @@ lazy_static! {
 
 struct Handler;
 
+/// Scans all users in the guild to check nickname compliance
+pub async fn scan(command: ApplicationCommandInteraction, guild: GuildId, ctx: Context) -> serenity::Result<()> {
+    // TODO: restrict command to admin
+    let guild = ctx.http.get_guild(guild.into()).await?;
+    let mut modified = 0;
+    for mut member in guild.members(&ctx.http, None, None).await? {
+        if modify_name(&ctx, &mut member).await {
+            modified += 1;
+        }
+    }
+    command.create_interaction_response(&ctx.http, |interaction| {
+        interaction
+            .kind(InteractionResponseType::ChannelMessageWithSource)
+            .interaction_response_data(|message| {
+                message.create_embed(|embed| {
+                    embed
+                        .title("Command Completed")
+                })
+            })
+    }).await
+}
+
 /// Modifies the name of the user to either sanitize it or assign it the ✓
-async fn modify_name(ctx: &Context, mem: &mut Member) {
-    mem.edit(&ctx.http, |m| m.nickname("Testing"))
-        .await
-        .expect("Failed to set display name of user");
+async fn modify_name(ctx: &Context, mem: &mut Member) -> bool {
+    let key: u64 = mem.user.id.into();
+    let key = key.to_be_bytes().to_vec();
+    let original = mem.display_name().to_string();
+    if original.ends_with("✓") {
+        return false;
+    }
+    let mut cleaned = mem.display_name().replace("✓", "_");
+    if let Ok(Some(_)) = USERDB.get(key) {
+        cleaned.push_str(" ✓");
+    }
+    if original != cleaned {
+        mem.edit(&ctx.http, |m| m.nickname(cleaned)).await;
+        true
+    } else {
+        false
+    }
 }
 
 #[async_trait]
@@ -102,6 +140,17 @@ impl EventHandler for Handler {
                             USERDB
                                 .insert(key, serde_json::to_vec(&data).expect("Failed to save verified user (Encoding error)"))
                                 .expect("Failed to save verified user (DB error)");
+                            if let Ok(guildInfos) = ctx.http.get_guilds(&GuildPagination::After(GuildId(0)), 100).await {
+                                for guildInfo in guildInfos {
+                                    if let Ok(guild) = ctx.http.get_guild(guildInfo.id.into()).await {
+                                        if let Ok(members) = guild.members(&ctx.http, None, None).await {
+                                            for mut mem in members {
+                                                modify_name(&ctx, &mut mem).await;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             "You've been verified! Please check participating servers to see a check mark next to your name!"
                         }
                         Err(_) => "Oh Snap! Something went wrong on our side. Please try again later."
@@ -152,7 +201,7 @@ impl EventHandler for Handler {
             if let Err(why) = match command.data.name.as_str() {
                 "verify" => handlers::verify(command, ctx).await,
                 "rescan" => match command.guild_id {
-                    Some(guild) => handlers::scan(guild, ctx).await,
+                    Some(guild) => scan(command, guild, ctx).await,
                     None => {
                         command
                             .create_interaction_response(&ctx.http, |response| {
