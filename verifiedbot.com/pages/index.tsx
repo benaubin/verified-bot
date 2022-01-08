@@ -74,13 +74,13 @@ const Home = ({ oauthLink }: Props) => {
             <p>
               When you submit a verification request, we use your student ID and
               the university directory to send an email with an encrypted
-              version of your student ID. We don&quot;t store your student ID until
+              version of your student ID. We don&apos;t store your student ID until
               you confirm verification.
             </p>
             <p>
               Once you confirm your ID, we store your encrypted student ID, as
               well as public information about your student status (such as your
-              affiliation, major and school). You&quot;ll be able to see this
+              affiliation, major and school). You&apos;ll be able to see this
               information before you confirm your ID. This data is made
               available to anyone with your Discord ID, such as servers you are
               a part of.
@@ -94,7 +94,7 @@ const Home = ({ oauthLink }: Props) => {
             </p>
             <p>
               To be clear, this is a free service, which is provided as-is without a
-              warranty of any kind. We don&quot;t guarantee that the service will operate
+              warranty of any kind. We don&apos;t guarantee that the service will operate
               as intended, and as a condition of using our service, you assume all
               risks. You can (and should) read our{" "}
               <a href="https://github.com/arpan-dhatt/utexas-verify-discord-bot">
