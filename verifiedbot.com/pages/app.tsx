@@ -12,6 +12,7 @@ import {
   PERMISSIONS,
 } from "../lib/discord";
 import Link from "next/link";
+import { getCsrfToken } from "../lib/csrf";
 
 interface Props {
   discordUser: DiscordUser;
@@ -62,17 +63,7 @@ const UtEIDForm = () => {
           onSubmit={(e) => {
             e.preventDefault();
 
-            let csrf_token;
-            if (typeof window !== "undefined") {
-              csrf_token = document.cookie
-                .trim()
-                .split(";")
-                .map((cookie) => cookie.trim().split("=", 2))
-                .find(([k]) => k == "csrf_token")?.[1];
-              if (csrf_token == null) {
-                document.cookie = "csrf_token=" + crypto.randomUUID!();
-              }
-            }
+            const csrf_token = getCsrfToken();
 
             setLoading(true);
 

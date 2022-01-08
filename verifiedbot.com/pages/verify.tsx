@@ -13,6 +13,10 @@ import { useLayoutEffect, useState } from "react";
 import {decode} from "@msgpack/msgpack";
 import {VerifiedClaims} from "../lib/token";
 import ClaimsData from "../components/ClaimsData";
+import { getCsrfToken } from "../lib/csrf";
+import { useRouter } from "next/router";
+import { useRef } from "react";
+import { useEffect } from "react";
 
 interface Props {
   discordUser: DiscordUser;
@@ -48,16 +52,42 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
   };
 }, ironOptions);
 
-export default function App({ discordUser }: Props) {
-  const [claims, setClaims] = useState<VerifiedClaims | null>(null);
+const verify = async (token: string) => {
+  const csrf_token = getCsrfToken();
+  return fetch("/api/verify", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      csrf_token,
+      token,
+    }),
+  });
+}
 
-  useLayoutEffect(() => {
-    const bytesStr = atob(
-      location.hash.slice(1).replaceAll("-", "+").replaceAll("_", "/")
-    );
-    const buf = new Uint8Array(bytesStr.length - 32);
-    for (let i = 0; i < bytesStr.length; i++)
-      buf[i] = bytesStr.charCodeAt(i);
+const token = typeof window === "undefined" ? null : window.location.hash.slice(1);
+if (token) {
+  window.history.replaceState({}, document.title, location.pathname);
+}
+
+export default function Verify({ discordUser }: Props) {
+  const [claims, setClaims] = useState<VerifiedClaims | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!token) {
+      router.push("/app");
+      return;
+    }
+
+    console.log(token);
+
+    const byteStr = atob(token.replaceAll("-", "+").replaceAll("_", "/"));
+    const buf = new Uint8Array(byteStr.length - 32);
+    for (let i = 0; i < buf.length; i++) buf[i] = byteStr.charCodeAt(i);
     const [encrypted_eid, major, school, affiliation] = decode(buf) as [Buffer, String[], String[], String[]];
     setClaims({ encrypted_eid, major, school, affiliation });
   }, []);
@@ -127,8 +157,23 @@ export default function App({ discordUser }: Props) {
 
         {claims && <ClaimsData claims={claims}></ClaimsData>}
 
+        {message && <p>{message}</p>}
+
         <p>
-          <button formAction="/api/verify">Verify my Discord account</button>
+          <button disabled={loading} onClick={(e) => {
+            setLoading(true);
+            verify(token!).then(async (res) => {
+              if (res.ok) {
+                router.push("/app");
+              } else {
+                const message = await res.text();
+                setMessage(message);
+              }
+            }).finally(() => {
+              setLoading(false);
+            })
+            e.preventDefault();
+          }}>Verify my Discord account</button>
         </p>
 
         <p>
