@@ -8,7 +8,6 @@ import {
   DiscordUser,
   getDiscordAddBotLink,
   getDiscordGuilds,
-  getDiscordOauthLink,
   getDiscordUser,
   PERMISSIONS,
 } from "../lib/discord";
@@ -44,22 +43,94 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
 
 const UtEIDForm = () => {
   const [eid, setEid] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
   return (
     <div>
       <p>Enter your UT EID to verify your Discord account.</p>
-      <form>
+      {error && <p>{error}</p>}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+
+          let csrf_token;
+          if (typeof window !== "undefined") {
+            csrf_token = document.cookie
+              .trim()
+              .split(";")
+              .map((cookie) => cookie.trim().split("=", 2))
+              .find(([k]) => k == "csrf_token")?.[1];
+            if (csrf_token == null) {
+              document.cookie = "csrf_token=" + crypto.randomUUID!();
+            }
+          }
+
+          setLoading(true);
+
+          (async () => {
+            try {
+              const res = await fetch("/api/request-token", {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                  eid,
+                  csrf_token,
+                }),
+              });
+            } catch (e) {
+              setError("Internal JavaScript error.");
+              throw e;
+            } finally {
+              setLoading(false);
+            }
+          })();
+
+          return false;
+        }}>
         <input
+          disabled={loading}
           type="text"
+          placeholder="UT EID"
           value={eid}
           onChange={(e) => {
             setEid(e.target.value);
           }}
         />
+
+        <input
+          disabled={loading}
+          type="submit"
+          value="Begin Verification"></input>
       </form>
 
       <p>
         <Link href="/#privacy">Privacy policy</Link>
       </p>
+
+      <style jsx>{`
+        input[type="text"] {
+          width: 100%;
+          font-size: 14px;
+          padding: 8px;
+          margin: 6px 0;
+          border: 1px solid #aaa;
+          border-radius: 6px;
+          outline: none;
+        }
+        input[type="submit"] {
+          font-size: 14px;
+          padding: 12px;
+          margin: 6px 0;
+          border: none;
+          border-radius: 6px;
+          outline: none;
+          background: #001f3f;
+          color: #fff;
+        }
+      `}</style>
     </div>
   );
 };
