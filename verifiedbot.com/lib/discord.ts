@@ -61,8 +61,12 @@ export const getDiscordOauthLink = async (ctx: GetServerSidePropsContext) => {
   }
   const oauthLink =
     `https://discord.com/api/oauth2/authorize?response_type=code` +
-    `&client_id=${encodeURIComponent(process.env.DISCORD_CLIENT_ID!)}` +
-    `&redirect_uri=${encodeURIComponent(process.env.DISCORD_REDIRECT!)}` +
+    `&client_id=${encodeURIComponent(
+      process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID!
+    )}` +
+    `&redirect_uri=${encodeURIComponent(
+      process.env.NEXT_PUBLIC_DISCORD_REDIRECT!
+    )}` +
     `&state=${encodeURIComponent((session as any).oauthState)}` +
     `&scope=${encodeURIComponent(["identify", "guilds"].join(" "))}`;
   return oauthLink;
@@ -71,7 +75,7 @@ export const getDiscordOauthLink = async (ctx: GetServerSidePropsContext) => {
 export const getDiscordAddBotLink = (guild_id?: string) => {
   return (
     `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(
-      process.env.DISCORD_CLIENT_ID!
+      process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID!
     )}` +
     `&scope=bot` +
     `&permissions=${PERMISSIONS.requested}` +

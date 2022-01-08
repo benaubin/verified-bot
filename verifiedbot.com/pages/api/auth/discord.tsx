@@ -16,8 +16,8 @@ export default withIronSessionApiRoute(async (req, res) => {
   }
 
   const data = new URLSearchParams();
-  data.append("redirect_uri", process.env.DISCORD_REDIRECT!);
-  data.append("client_id", process.env.DISCORD_CLIENT_ID!);
+  data.append("redirect_uri", process.env.NEXT_PUBLIC_DISCORD_REDIRECT!);
+  data.append("client_id", process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID!);
   data.append("client_secret", process.env.DISCORD_SECRET!);
   data.append("grant_type", "authorization_code");
   data.append("code", code);
