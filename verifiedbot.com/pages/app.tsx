@@ -117,7 +117,7 @@ export default function App({ discordUser, claims, guilds }: Props) {
 
               <ul>
                 {managedGuilds.map((guild) => (
-                  <li>
+                  <li key={guild.id}>
                     {guild.name} <a href={getDiscordAddBotLink(guild.id)} target="_top">Add</a>
                   </li>
                 ))}
