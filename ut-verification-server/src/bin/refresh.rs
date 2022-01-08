@@ -15,7 +15,7 @@ fn main() {
 
     let mut token = String::new();
     if let Err(_) = std::io::stdin().read_line(&mut token) {
-        println!("Status: 400 Bad Request");
+        println!("Status: 400 Bad Request\n");
         return;
     }
 

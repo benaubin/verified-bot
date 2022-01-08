@@ -67,7 +67,7 @@ fn main() {
 
     let mut request_token = String::new();
     if let Err(_) = std::io::stdin().read_line(&mut request_token) {
-        println!("Status: 400 Bad Request");
+        println!("Status: 400 Bad Request\n");
         return;
     }
 
@@ -77,7 +77,7 @@ fn main() {
     let request: RequestClaims = match jsonwebtoken::decode(request_token.trim(), &request_key, &validation) {
         Ok(token) => token.claims,
         Err(_) => {
-            println!("Status: 400 Bad Request");
+            println!("Status: 400 Bad Request\n");
             return;
         }
     };
@@ -86,7 +86,7 @@ fn main() {
     let person = match Person::lookup(&eid, &encryption_key) {
         Ok(person) => person,
         Err(_) => {
-            println!("Status: 400 Bad Request");
+            println!("Status: 400 Bad Request\n");
             return;
         }
     };
@@ -96,11 +96,10 @@ fn main() {
 
     match send_mail(&person.name, &email, &token) {
         Ok(_) => {
-            println!("Status: 204 No Response");
+            println!("Status: 200 OK\n");
         }
-        Err(err) => {
-            println!("Status: 500 Internal Server Error");
-            eprintln!("{:#?}", err);
+        Err(_) => {
+            println!("Status: 500 Internal Server Error\n");
         }
     }
 }
