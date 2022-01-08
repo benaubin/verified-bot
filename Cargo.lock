@@ -2215,6 +2215,7 @@ dependencies = [
  "aes-gcm-siv",
  "base64 0.13.0",
  "handlebars",
+ "jsonwebtoken",
  "ldap3",
  "lettre",
  "lettre_email",

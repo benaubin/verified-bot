@@ -1,13 +1,24 @@
-import { config, DynamoDB, AWSError } from "aws-sdk";
 import { withIronSessionApiRoute } from "iron-session/next";
 import { NextApiHandler } from "next";
 import { ironOptions } from "../../lib/config";
-import { docClient, getUser, User } from "../../lib/db";
+import { docClient, User } from "../../lib/db";
+import jwt from "jsonwebtoken";
 
 const RATE_LIMIT = 3 * 1000;
 
 const requestToken = async (eid: string) => {
-  console.log(eid);
+  const requestKey = Buffer.from(process.env.REQUEST_KEY!, "base64url");
+  const token = jwt.sign(
+    {
+      ut_eid: eid,
+      aud: "ut-verification-server",
+      sub: "request-token",
+      exp: Math.floor(Date.now() / 1000) + RATE_LIMIT,
+    },
+    requestKey
+  );
+
+  console.log(token);
 };
 
 const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
