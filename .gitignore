@@ -2,3 +2,5 @@
 /target
 /utv-bot/user_db
 .env
+
+/verifiedbot.com/.env.local
