@@ -45,66 +45,82 @@ const UtEIDForm = () => {
   const [eid, setEid] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   return (
     <div>
       <p>Enter your UT EID to verify your Discord account.</p>
       {error && <p>{error}</p>}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
 
-          let csrf_token;
-          if (typeof window !== "undefined") {
-            csrf_token = document.cookie
-              .trim()
-              .split(";")
-              .map((cookie) => cookie.trim().split("=", 2))
-              .find(([k]) => k == "csrf_token")?.[1];
-            if (csrf_token == null) {
-              document.cookie = "csrf_token=" + crypto.randomUUID!();
+      {success ? (
+        <>
+          {success}{" "}
+          <a onClick={() => { setSuccess("") }} style={{cursor: "pointer"}}>Retry</a>.
+        </>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+
+            let csrf_token;
+            if (typeof window !== "undefined") {
+              csrf_token = document.cookie
+                .trim()
+                .split(";")
+                .map((cookie) => cookie.trim().split("=", 2))
+                .find(([k]) => k == "csrf_token")?.[1];
+              if (csrf_token == null) {
+                document.cookie = "csrf_token=" + crypto.randomUUID!();
+              }
             }
-          }
 
-          setLoading(true);
+            setLoading(true);
 
-          (async () => {
-            try {
-              const res = await fetch("/api/request-token", {
-                method: "POST",
-                headers: {
-                  "content-type": "application/json",
-                },
-                body: JSON.stringify({
-                  eid,
-                  csrf_token,
-                }),
-              });
-            } catch (e) {
-              setError("Internal JavaScript error.");
-              throw e;
-            } finally {
-              setLoading(false);
-            }
-          })();
+            (async () => {
+              try {
+                const res = await fetch("/api/request-token", {
+                  method: "POST",
+                  headers: {
+                    "content-type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    eid,
+                    csrf_token,
+                  }),
+                });
+                if (res.ok) {
+                  setSuccess(await res.text());
+                  setError("");
+                } else {
+                  setSuccess("");
+                  setError(await res.text());
+                }
+              } catch (e) {
+                setError("Internal JavaScript error.");
+                throw e;
+              } finally {
+                setLoading(false);
+              }
+            })();
 
-          return false;
-        }}>
-        <input
-          disabled={loading}
-          type="text"
-          placeholder="UT EID"
-          value={eid}
-          onChange={(e) => {
-            setEid(e.target.value);
-          }}
-        />
+            return false;
+          }}>
+          <input
+            disabled={loading}
+            type="text"
+            placeholder="UT EID"
+            value={eid}
+            onChange={(e) => {
+              setEid(e.target.value);
+            }}
+          />
 
-        <input
-          disabled={loading}
-          type="submit"
-          value="Begin Verification"></input>
-      </form>
+          <input
+            disabled={loading}
+            type="submit"
+            value="Begin Verification"></input>
+        </form>
+      )}
 
       <p>
         <Link href="/#privacy">Privacy policy</Link>
@@ -177,25 +193,26 @@ export default function App({ discordUser, claims, guilds }: Props) {
           )}
         </div>
 
-        {
-          managedGuilds.length > 0
-          ? <div>
-              <h2>Servers you manage:</h2>
+        {managedGuilds.length > 0 ? (
+          <div>
+            <h2>Servers you manage:</h2>
 
-              <p>
-                You can add Verified Bot to any server you manage.
-              </p>
+            <p>You can add Verified Bot to any server you manage.</p>
 
-              <ul>
-                {managedGuilds.map((guild) => (
-                  <li key={guild.id}>
-                    {guild.name} <a href={getDiscordAddBotLink(guild.id)} target="_top">Add</a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          : <></>
-        }
+            <ul>
+              {managedGuilds.map((guild) => (
+                <li key={guild.id}>
+                  {guild.name}{" "}
+                  <a href={getDiscordAddBotLink(guild.id)} target="_top">
+                    Add
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <></>
+        )}
 
         <style jsx>{`
           .discord-info {
