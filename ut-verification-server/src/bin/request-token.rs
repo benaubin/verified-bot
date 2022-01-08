@@ -12,10 +12,10 @@ use utv_server::directory::Person;
 use utv_token;
 
 fn send_mail(name: &str, email: &str, token: &str) -> Result<(), SmtpError> {
-    let from_address = std::env::var("FROM_ADDRESS").expect("Missing FROM_ADDRESS");
-    let smtp_domain = std::env::var("SMTP_DOMAIN").expect("Missing SMTP_DOMAIN");
-    let smtp_username = std::env::var("SMTP_USERNAME").expect("Missing SMTP_USERNAME");
-    let smtp_password = std::env::var("SMTP_PASSWORD").expect("Missing SMTP_PASSWORD");
+    let from_address = std::option_env!("FROM_ADDRESS").expect("Missing FROM_ADDRESS");
+    let smtp_domain = std::option_env!("SMTP_DOMAIN").expect("Missing SMTP_DOMAIN");
+    let smtp_username = std::option_env!("SMTP_USERNAME").expect("Missing SMTP_USERNAME");
+    let smtp_password = std::option_env!("SMTP_PASSWORD").expect("Missing SMTP_PASSWORD");
 
     static TEMPLATE: &'static str = include_str!("../email.hbs");
     let reg = Handlebars::new();
@@ -38,7 +38,7 @@ fn send_mail(name: &str, email: &str, token: &str) -> Result<(), SmtpError> {
         .unwrap()
         .into();
 
-    let smtp_creds = Credentials::new(smtp_username, smtp_password);
+    let smtp_creds = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
     let smtp_client = SmtpClient::new_simple(&smtp_domain)
         .unwrap()
         .credentials(smtp_creds);
@@ -55,9 +55,9 @@ struct RequestClaims {
 }
 
 fn main() {
-    let shared_key = std::env::var("SHARED_KEY").expect("Missing SHARED_KEY");
-    let encryption_key = std::env::var("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY");
-    let request_key = std::env::var("REQUEST_KEY").expect("Missing REQUEST_KEY");
+    let shared_key = std::option_env!("SHARED_KEY").expect("Missing SHARED_KEY");
+    let encryption_key = std::option_env!("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY");
+    let request_key = std::option_env!("REQUEST_KEY").expect("Missing REQUEST_KEY");
     let shared_key =
         base64::decode_config(shared_key, base64::URL_SAFE_NO_PAD).expect("Invalid ENCRYPTION_KEY");
     let encryption_key = base64::decode_config(encryption_key, base64::URL_SAFE_NO_PAD)
