@@ -4,6 +4,7 @@ import { withIronSessionSsr } from "iron-session/next";
 import { DISCORD_API_BASE, ironOptions } from "../lib/config";
 import { getUser, User } from "../lib/db";
 import { DiscordUser, getDiscordUser } from "../lib/discord";
+import Link from "next/link";
 
 interface Props {
   discordUser: DiscordUser;
@@ -44,7 +45,7 @@ const UtEIDForm = () => {
       </form>
 
       <p>
-        <a href="/#privacy">Privacy policy</a>
+        <Link href="/#privacy">Privacy policy</Link>
       </p>
     </div>
   );
@@ -74,7 +75,7 @@ export default function App({discordUser, claims}: Props) {
             <div className="name">{discordUser.username}</div>
             <div className="discriminator">#{discordUser.discriminator}</div>
             <div>
-              Not you? <a href="/api/logout">Logout</a>
+              Not you? <Link href="/api/logout">Logout</Link>
             </div>
           </div>
         </div>
