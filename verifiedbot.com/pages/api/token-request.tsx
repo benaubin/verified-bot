@@ -1,5 +1,5 @@
 import { config, DynamoDB } from "aws-sdk";
-import { withIronSessionApiRoute } from "iron-session/next/dist";
+import { withIronSessionApiRoute } from "iron-session/next";
 import { NextApiHandler } from "next";
 import { ironOptions } from "../../lib/config";
 import { docClient, getUser, User } from "../../lib/db";

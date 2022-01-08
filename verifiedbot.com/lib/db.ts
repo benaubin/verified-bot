@@ -1,7 +1,11 @@
 import { config } from "aws-sdk";
 
 config.update({
-  region: process.env.AWS_REGION,
+  region: process.env.VB_AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.VB_AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.VB_AWS_SECRET_ACCESS_KEY!,
+  },
 });
 
 import { DynamoDB } from "aws-sdk";

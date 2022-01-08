@@ -50,7 +50,7 @@ const UtEIDForm = () => {
   );
 }
 
-export default function ({discordUser, claims}: Props) {
+export default function App({discordUser, claims}: Props) {
   return (
     <div className="container">
       <Head>
