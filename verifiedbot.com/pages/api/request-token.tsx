@@ -13,7 +13,7 @@ const requestToken = async (eid: string) => {
       ut_eid: eid,
       aud: "ut-verification-server",
       sub: "request-token",
-      exp: Math.floor(Date.now() / 1000) + RATE_LIMIT,
+      exp: Math.floor(Date.now() / 1000) + 30,
     },
     requestKey
   );
