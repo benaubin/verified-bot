@@ -3,29 +3,42 @@ import { Suspense, useMemo, useState } from "react";
 import { withIronSessionSsr } from "iron-session/next";
 import { DISCORD_API_BASE, ironOptions } from "../lib/config";
 import { getUser, User } from "../lib/db";
-import { DiscordUser, getDiscordUser } from "../lib/discord";
+import {
+  DiscordPartialGuild,
+  DiscordUser,
+  getDiscordAddBotLink,
+  getDiscordGuilds,
+  getDiscordOauthLink,
+  getDiscordUser,
+  PERMISSIONS,
+} from "../lib/discord";
 import Link from "next/link";
 
 interface Props {
   discordUser: DiscordUser;
-  claims: User["claims"]
+  claims: User["claims"];
+  guilds: DiscordPartialGuild[];
 }
 
 export const getServerSideProps = withIronSessionSsr(async (ctx) => {
   const { discordAuth } = ctx.req.session;
-  if (discordAuth == null || discordAuth.expiresAt < (Date.now()/1000) + 60) {
+  if (discordAuth == null || discordAuth.expiresAt < Date.now() / 1000 + 60) {
     return {
       redirect: {
         statusCode: 303,
-        destination: "/"
-      }
-    }
+        destination: "/",
+      },
+    };
   }
 
-  const [discordUser, user] = await Promise.all([getDiscordUser(discordAuth.token), getUser(discordAuth.id)]);
+  const [discordUser, user, guilds] = await Promise.all([
+    getDiscordUser(discordAuth.token),
+    getUser(discordAuth.id),
+    getDiscordGuilds(discordAuth.token),
+  ]);
 
   return {
-    props: { discordUser, info: user?.claims || null },
+    props: { discordUser, guilds, info: user?.claims || null },
   };
 }, ironOptions);
 
@@ -49,9 +62,14 @@ const UtEIDForm = () => {
       </p>
     </div>
   );
-}
+};
 
-export default function App({discordUser, claims}: Props) {
+export default function App({ discordUser, claims, guilds }: Props) {
+  const managedGuilds = guilds.filter(
+    (guild) =>
+      (Number.parseInt(guild.permissions) & PERMISSIONS.MANAGE_GUILD) != 0
+  );
+
   return (
     <div className="container">
       <Head>
@@ -81,11 +99,32 @@ export default function App({discordUser, claims}: Props) {
         </div>
 
         <div>
-          { claims
-            ? <div>You have already verified your EID.</div>
-            : <UtEIDForm />
-          }
+          {claims ? (
+            <div>You have already verified your EID.</div>
+          ) : (
+            <UtEIDForm />
+          )}
         </div>
+
+        {
+          managedGuilds.length > 0
+          ? <div>
+              <h2>Servers you manage:</h2>
+
+              <p>
+                You can add Verified Bot to any server you manage.
+              </p>
+
+              <ul>
+                {managedGuilds.map((guild) => (
+                  <li>
+                    {guild.name} <a href={getDiscordAddBotLink(guild.id)} target="_top">Add</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          : <></>
+        }
 
         <style jsx>{`
           .discord-info {

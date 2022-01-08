@@ -8,27 +8,15 @@ import { withIronSessionSsr } from "iron-session/next";
 import bg from "../assets/marek-piwnicki-B19q-khdj1E-unsplash.jpg";
 import { useEffect, useMemo, useState } from 'react';
 import { ironOptions } from '../lib/config';
+import { getDiscordOauthLink } from "../lib/discord"
 
 interface Props {
   oauthLink: string;
 }
 
+
 export const getServerSideProps = withIronSessionSsr(async (ctx) => {
-  const {session} = ctx.req;
-  if ((session as any).oauthState == null) {
-    (session as any).oauthState = (await import("crypto")).randomBytes(16).toString("base64url");
-    await session.save();
-  }
-  const oauthLink =
-    `https://discord.com/api/oauth2/authorize?response_type=code` +
-    `&client_id=${encodeURIComponent(
-      process.env.DISCORD_CLIENT_ID!
-    )}` +
-    `&redirect_uri=${encodeURIComponent(
-      process.env.DISCORD_REDIRECT!
-    )}` +
-    `&state=${encodeURIComponent((session as any).oauthState)}` +
-    `&scope=identify`;
+  const oauthLink = await getDiscordOauthLink(ctx);
   return {
     props: {oauthLink},
   };
