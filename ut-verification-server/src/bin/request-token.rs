@@ -65,6 +65,15 @@ fn main() {
     let request_key = base64::decode_config(&request_key, base64::URL_SAFE_NO_PAD).expect("Invalid REQUEST_KEY");
     let request_key = jsonwebtoken::DecodingKey::from_secret(&request_key);
 
+    let mut line = String::new();
+    loop {
+        if let Err(err) = std::io::stdin().read_line(&mut line) {
+            panic!("{:?}", err);
+        }
+        if line.trim().len() == 0 { break; }
+        line.clear();
+    }
+
     let mut request_token = String::new();
     if let Err(_) = std::io::stdin().read_line(&mut request_token) {
         println!("Status: 400 Bad Request\n");
