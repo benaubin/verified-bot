@@ -27,3 +27,23 @@ a {
   max-width: 90vw;
   margin: 80px auto;
 }
+
+input[type="text"] {
+  width: 100%;
+  font-size: 14px;
+  padding: 8px;
+  margin: 6px 0;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  outline: none;
+}
+input[type="submit"], button {
+  font-size: 14px;
+  padding: 12px;
+  margin: 6px 0;
+  border: none;
+  border-radius: 6px;
+  outline: none;
+  background: #0074D9;
+  color: #fff;
+}

@@ -2,7 +2,7 @@ import crypto from "crypto";
 import msgpack from "@msgpack/msgpack";
 
 export interface VerifiedClaims {
-  encrypted_eid: Buffer,
+  encrypted_eid: Buffer | Uint8Array,
   major: String[],
   school: String[],
   affiliation: String[]

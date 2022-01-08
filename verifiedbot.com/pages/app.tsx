@@ -125,28 +125,6 @@ const UtEIDForm = () => {
       <p>
         <Link href="/#privacy">Privacy policy</Link>
       </p>
-
-      <style jsx>{`
-        input[type="text"] {
-          width: 100%;
-          font-size: 14px;
-          padding: 8px;
-          margin: 6px 0;
-          border: 1px solid #aaa;
-          border-radius: 6px;
-          outline: none;
-        }
-        input[type="submit"] {
-          font-size: 14px;
-          padding: 12px;
-          margin: 6px 0;
-          border: none;
-          border-radius: 6px;
-          outline: none;
-          background: #001f3f;
-          color: #fff;
-        }
-      `}</style>
     </div>
   );
 };
