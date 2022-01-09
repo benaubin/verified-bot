@@ -33,7 +33,12 @@ export const getDiscordGuilds = async (token: string) => {
       authorization: "Bearer " + token,
     }),
   });
-  return (await res.json()) as DiscordPartialGuild[];
+  if (res.ok) {
+    return (await res.json()) as DiscordPartialGuild[];
+  } else {
+    console.error("Error fetching guilds: ", await res.json());
+    return [];
+  }
 };
 
 export namespace PERMISSIONS {
