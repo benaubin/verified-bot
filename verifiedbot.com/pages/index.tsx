@@ -46,8 +46,7 @@ const Home = ({ oauthLink }: Props) => {
         <h1>Verified Bot</h1>
         <p>
           Verified Bot strengthens Discord communities by providing an optional
-          mechanism for users to verify their student status while maintaining
-          their privacy.
+          mechanism for users to verify their student status.
         </p>
 
         <p>

@@ -120,17 +120,21 @@ export default function Verify({ discordUser }: Props) {
             with your UT EID, and applies to every server.
           </li>
           <li>
-            We will share your affiliation, department and major with servers
-            you are a part of, and may update this based on public directory
-            information, until you ask us to stop.
+            We will store your encrypted student ID, as well as public
+            information about your student status, which you can see below.
+            This data will be made available to anyone with your Discord ID,
+            such as servers you are a part of.
           </li>
           <li>
-            We store an encrypted version of your EID, which requires a secret
-            key to decypher. We will only share your unencrypted EID if we are
-            obligated to do so by law, or upon request of a UT official, such
-            as to investigate a harassment incident.
+            We may share your EID with university officials upon request, such
+            as to investigate a harassment incident. Where permitted, we'll
+            notify you if this occurs.
           </li>
-          <li>We will not store any other information about you.</li>
+          <li>
+            This is a free service, provided as-is, and you assume all risks of
+            using it. If you want to verify our privacy measures, read our {" "}
+            <a target="_blank" href="https://github.com/arpan-dhatt/utexas-verify-discord-bot">source code</a>.
+          </li>
         </ol>
 
         <p>You're verifying this Discord account:</p>
