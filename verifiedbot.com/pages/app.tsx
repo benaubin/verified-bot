@@ -13,10 +13,11 @@ import {
 } from "../lib/discord";
 import Link from "next/link";
 import { getCsrfToken } from "../lib/csrf";
+import ClaimsData, { readableClaims, ReadableClaims } from "../components/ClaimsData";
 
 interface Props {
   discordUser: DiscordUser;
-  claims: User["claims"];
+  claims: ReadableClaims;
   guilds: DiscordPartialGuild[];
 }
 
@@ -37,8 +38,9 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
     getDiscordGuilds(discordAuth.token),
   ]);
 
+  const claims = (user?.claims) ? readableClaims(user.claims) : null;
   return {
-    props: { discordUser, guilds, info: user?.claims || null },
+    props: { discordUser, guilds, claims },
   };
 }, ironOptions);
 
@@ -139,6 +141,7 @@ export default function App({ discordUser, claims, guilds }: Props) {
 
       <main>
         <h1>Verified Bot</h1>
+
         <div className="discord-info">
           <img
             className="avatar"
@@ -156,7 +159,10 @@ export default function App({ discordUser, claims, guilds }: Props) {
 
         <div>
           {claims ? (
-            <div>You have already verified your EID.</div>
+            <>
+              <h2>Your verified info:</h2>
+              <ClaimsData claims={claims}></ClaimsData>
+            </>
           ) : (
             <UtEIDForm />
           )}

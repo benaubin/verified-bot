@@ -9,16 +9,12 @@ config.update({
 });
 
 import { DynamoDB } from "aws-sdk";
+import { VerifiedClaims } from "./token";
 
 export interface User {
   discord_id: String;
   token_requested_at: number;
-  encrypted_eid: Buffer;
-  claims: {
-    major: String[];
-    school: String[];
-    affiliation: String[];
-  };
+  claims: VerifiedClaims;
 }
 
 export const docClient = new DynamoDB.DocumentClient();
@@ -27,5 +23,5 @@ export const getUser = async (discord_id: string) => {
   const user = await docClient
     .get({ TableName: "users", Key: { discord_id } })
     .promise();
-  return user as any as User;
+  return user.Item as any as User;
 };

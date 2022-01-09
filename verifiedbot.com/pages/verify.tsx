@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useLayoutEffect, useState } from "react";
 import {decode} from "@msgpack/msgpack";
 import {VerifiedClaims} from "../lib/token";
-import ClaimsData from "../components/ClaimsData";
+import ClaimsData, { readableClaims, ReadableClaims } from "../components/ClaimsData";
 import { getCsrfToken } from "../lib/csrf";
 import { useRouter } from "next/router";
 import { useRef } from "react";
@@ -38,13 +38,13 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
     getUser(discordAuth.id)
   ]);
 
-  if (dbUser.claims) {
+  if (dbUser?.claims) {
     return {
       redirect: {
-        permanent: false,
-        destination: "/app"
-      }
-    }
+        statusCode: 303,
+        destination: "/app#",
+      },
+    };
   }
 
   return {
@@ -72,7 +72,7 @@ if (token) {
 }
 
 export default function Verify({ discordUser }: Props) {
-  const [claims, setClaims] = useState<VerifiedClaims | null>(null);
+  const [claims, setClaims] = useState<ReadableClaims | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
@@ -89,7 +89,7 @@ export default function Verify({ discordUser }: Props) {
     const buf = new Uint8Array(byteStr.length - 32);
     for (let i = 0; i < buf.length; i++) buf[i] = byteStr.charCodeAt(i);
     const [encrypted_eid, major, school, affiliation] = decode(buf) as [Buffer, String[], String[], String[]];
-    setClaims({ encrypted_eid, major, school, affiliation });
+    setClaims(readableClaims({ encrypted_eid, major, school, affiliation }));
   }, []);
 
   return (
@@ -160,20 +160,26 @@ export default function Verify({ discordUser }: Props) {
         {message && <p>{message}</p>}
 
         <p>
-          <button disabled={loading} onClick={(e) => {
-            setLoading(true);
-            verify(token!).then(async (res) => {
-              if (res.ok) {
-                router.push("/app");
-              } else {
-                const message = await res.text();
-                setMessage(message);
-              }
-            }).finally(() => {
-              setLoading(false);
-            })
-            e.preventDefault();
-          }}>Verify my Discord account</button>
+          <button
+            disabled={loading}
+            onClick={(e) => {
+              setLoading(true);
+              verify(token!)
+                .then(async (res) => {
+                  if (res.ok) {
+                    router.push("/app#");
+                  } else {
+                    const message = await res.text();
+                    setMessage(message);
+                  }
+                })
+                .finally(() => {
+                  setLoading(false);
+                });
+              e.preventDefault();
+            }}>
+            Verify my Discord account
+          </button>
         </p>
 
         <p>
