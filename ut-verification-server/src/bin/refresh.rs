@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde_json;
 use utv_token::VerifiedClaims;
 
-fn main() {
+fn main() { cgi::handle(|request| {
     let encryption_key = std::option_env!("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY");
     let encryption_key = base64::decode_config(encryption_key, base64::URL_SAFE_NO_PAD)
         .expect("Invalid ENCRYPTION_KEY");
@@ -13,29 +13,23 @@ fn main() {
     let shared_key =
         base64::decode_config(shared_key, base64::URL_SAFE_NO_PAD).expect("Invalid SHARED_KEY");
 
-    let mut token = String::new();
-    if let Err(_) = std::io::stdin().read_line(&mut token) {
-        println!("Status: 400 Bad Request\n");
-        return;
+    let token = String::from_utf8(request.into_body());
+    if let Err(_) = token {
+        return cgi::text_response(400, "Token must be valid UTF8");
     }
+    let token = token.unwrap();
 
     let old_claims = match utv_token::decode_token(token.trim(), &shared_key) {
         Ok(c) => c,
         Err(_) => {
-            println!("Status: 400 Bad Request");
-            println!();
-            println!("Bad token");
-            return;
+            return cgi::text_response(400, "Bad Token");
         }
     };
 
     let eid = match deterministic_aes::decrypt(&old_claims.encrypted_eid, &encryption_key) {
         Ok(eid) => eid,
         Err(_) => {
-            println!("Status: 400 Bad Request");
-            println!();
-            println!("Bad encrypted eid");
-            return;
+            return cgi::text_response(400, "Bad encrypted EID");
         }
     };
     let eid = std::str::from_utf8(&eid[..])
@@ -44,42 +38,23 @@ fn main() {
     let person = match Person::lookup(&eid, &encryption_key) {
         Ok(person) => person,
         Err(LookupError::NotFound) => {
-            println!("Status: 404 Not Found");
-            println!("Content-Type: text/plain;charset=UTF-8");
-            println!();
-            println!("User no longer exists");
-            return;
+            return cgi::text_response(404, "User no longer exists");
         }
         Err(LookupError::MissingDirectoryInfo(_)) => {
-            println!("Status: 422 Unprocessable Entity");
-            println!("Content-Type: text/plain;charset=UTF-8");
-            println!();
-            println!("Required directory info not found");
-            return;
+            return cgi::text_response(422, "Required directory info not found");
         }
         Err(LookupError::LdapError(_)) => {
-            println!("Status: 500 Internal Server Error");
-            println!("Content-Type: text/plain;charset=UTF-8");
-            println!();
-            println!("Ldap Failed");
-            return;
+            return cgi::text_response(500, "LDAP failed");
         }
     };
 
     let new_token = utv_token::encode_token(&person.claims, &shared_key);
 
-    println!("Status: 200 OK");
-    println!("Content-Type: application/json;charset=UTF-8");
-    println!();
-    serde_json::to_writer(
-        std::io::stdout(),
-        &Response {
-            token: new_token,
-            claims: person.claims,
-        },
-    )
-    .unwrap();
-}
+    cgi::binary_response(200, "application/json;charset=UTF-8", serde_json::to_vec(&Response {
+        token: new_token,
+        claims: person.claims
+    }).unwrap())
+})}
 
 #[derive(Serialize)]
 struct Response {

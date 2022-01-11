@@ -54,7 +54,7 @@ struct RequestClaims {
     ut_eid: String
 }
 
-fn main() {
+fn main() { cgi::handle(|request| {
     let shared_key = std::option_env!("SHARED_KEY").expect("Missing SHARED_KEY");
     let encryption_key = std::option_env!("ENCRYPTION_KEY").expect("Missing ENCRYPTION_KEY");
     let request_key = std::option_env!("REQUEST_KEY").expect("Missing REQUEST_KEY");
@@ -65,20 +65,11 @@ fn main() {
     let request_key = base64::decode_config(&request_key, base64::URL_SAFE_NO_PAD).expect("Invalid REQUEST_KEY");
     let request_key = jsonwebtoken::DecodingKey::from_secret(&request_key);
 
-    let mut line = String::new();
-    loop {
-        if let Err(err) = std::io::stdin().read_line(&mut line) {
-            panic!("{:?}", err);
-        }
-        if line.trim().len() == 0 { break; }
-        line.clear();
+    let request_token = String::from_utf8(request.into_body());
+    if let Err(_) = request_token {
+        return cgi::text_response(400, "Token must be valid UTF8");
     }
-
-    let mut request_token = String::new();
-    if let Err(_) = std::io::stdin().read_line(&mut request_token) {
-        println!("Status: 400 Bad Request\n");
-        return;
-    }
+    let request_token = request_token.unwrap();
 
     let mut validation = Validation::new(jsonwebtoken::Algorithm::HS256);
     validation.aud = Some(HashSet::from_iter(["ut-verification-server".to_owned()]));
@@ -86,8 +77,7 @@ fn main() {
     let request: RequestClaims = match jsonwebtoken::decode(request_token.trim(), &request_key, &validation) {
         Ok(token) => token.claims,
         Err(_) => {
-            println!("Status: 400 Bad Request\n");
-            return;
+            return cgi::text_response(400, "Invalid JWT");
         }
     };
 
@@ -95,8 +85,7 @@ fn main() {
     let person = match Person::lookup(&eid, &encryption_key) {
         Ok(person) => person,
         Err(_) => {
-            println!("Status: 400 Bad Request\n");
-            return;
+            return cgi::text_response(400, "UT EID not in Directory");
         }
     };
 
@@ -106,9 +95,10 @@ fn main() {
     match send_mail(&person.name, &email, &token) {
         Ok(_) => {
             println!("Status: 200 OK\n");
+            return cgi::text_response(200, "OK");
         }
         Err(_) => {
-            println!("Status: 500 Internal Server Error\n");
+            return cgi::text_response(500, "Failed to send email");
         }
     }
-}
+})}
