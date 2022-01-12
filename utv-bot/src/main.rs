@@ -1,32 +1,16 @@
 mod handlers;
 mod db;
 
-use std::collections::HashMap;
-use std::{char, env};
+use std::env;
 
 use lazy_static::lazy_static;
-use serde_json::Value;
-use serenity::client::bridge::gateway::event::ShardStageUpdateEvent;
-use serenity::futures::TryFutureExt;
-use serenity::http::{CacheHttp, GuildPagination};
-use serenity::model::channel::{
-    Channel, ChannelCategory, GuildChannel, Message, PartialGuildChannel, Reaction, StageInstance,
-};
-use serenity::model::event::{
-    ChannelPinsUpdateEvent, GuildMembersChunkEvent, InviteCreateEvent, InviteDeleteEvent,
-    MessageUpdateEvent, PresenceUpdateEvent, ResumedEvent, ThreadListSyncEvent,
-    ThreadMembersUpdateEvent, TypingStartEvent, VoiceServerUpdateEvent,
-};
-use serenity::model::gateway::{Activity, Presence};
 use serenity::model::guild::{
-    Emoji, Guild, GuildUnavailable, Integration, Member, PartialGuild, Role, ThreadMember,
+    Guild, Member, PartialGuild, Role
 };
 use serenity::model::id::{
-    ApplicationId, ChannelId, EmojiId, GuildId, IntegrationId, MessageId, RoleId,
+    GuildId, RoleId,
 };
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
-use serenity::model::prelude::{CurrentUser, User, VoiceState};
-use serenity::utils::Color;
 use serenity::{
     async_trait,
     client::bridge::gateway::GatewayIntents,
@@ -40,11 +24,8 @@ use serenity::{
     },
     prelude::*,
 };
-use sled::IVec;
-use tokio::select_priv_declare_output_enum;
 
 lazy_static! {
-    static ref USERDB: sled::Db = sled::open("user_db").unwrap();
     static ref ROLEDB: sled::Db = sled::open("role_db").unwrap();
     static ref SHARED_KEY: Vec<u8> = {
         let key = std::env::var("SHARED_KEY").expect("SHARED_KEY env variable missing");
@@ -53,10 +34,13 @@ lazy_static! {
     };
 }
 
-struct Handler;
+struct Handler {
+    user_db: db::UserDB
+}
 
 /// Scans all users in the guild to check nickname compliance
 async fn scan(
+    user_db: &db::UserDB,
     command: ApplicationCommandInteraction,
     guild: GuildId,
     ctx: Context,
@@ -83,7 +67,7 @@ async fn scan(
     }
     let guild = ctx.http.get_guild(guild.into()).await?;
     for mut member in guild.members(&ctx.http, None, None).await? {
-        handle_member_status(&ctx, &mut member).await;
+        handle_member_status(user_db, &ctx, &mut member).await;
     }
     command
         .create_interaction_response(&ctx.http, |interaction| {
@@ -97,14 +81,12 @@ async fn scan(
 }
 
 /// Modifies the name and roles of the user to either sanitize it or assign it the ✓
-async fn handle_member_status(ctx: &Context, mem: &mut Member) -> bool {
+async fn handle_member_status(user_db: &db::UserDB, ctx: &Context, mem: &mut Member) -> bool {
     let guild = ctx.http.get_guild(mem.guild_id.into()).await.unwrap();
     let verified_role = get_verified_role(&ctx, &guild).await;
-    let key: u64 = mem.user.id.into();
-    let key = key.to_be_bytes().to_vec();
     let original = mem.display_name().to_string();
     let mut cleaned = mem.display_name().replace("✓", "_");
-    if let Ok(Some(_)) = USERDB.get(key) {
+    if user_db.user_exists(mem.user.id.into()).await {
         // verified
         if !mem.roles.contains(&verified_role.id) {
             mem.add_role(&ctx.http, verified_role.id).await.unwrap();
@@ -158,70 +140,25 @@ async fn get_verified_role<'a>(ctx: &'a Context, guild: &'a PartialGuild) -> &'a
 impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild) {
         for (_, mut member) in guild.members {
-            handle_member_status(&ctx, &mut member).await;
+            handle_member_status(&self.user_db, &ctx, &mut member).await;
         }
     }
 
     async fn guild_member_addition(&self, ctx: Context, guild_id: GuildId, mut new_member: Member) {
-        handle_member_status(&ctx, &mut new_member).await;
+        handle_member_status(&self.user_db, &ctx, &mut new_member).await;
     }
 
     async fn guild_member_update(&self, ctx: Context, update: GuildMemberUpdateEvent) {
         if let Some(new_nick) = update.nick {
             if let Ok(guild) = ctx.http.get_guild(update.guild_id.into()).await {
                 if let Ok(mut member) = guild.member(&ctx.http, update.user.id).await {
-                    handle_member_status(&ctx, &mut member).await;
+                    handle_member_status(&self.user_db, &ctx, &mut member).await;
                 }
             }
         }
     }
 
-    /// Handling token received in DM's
-    async fn message(&self, ctx: Context, new_message: Message) {
-        if let None = new_message.guild_id {
-            let token = new_message.content.as_str();
-            if let Ok(data) = utv_token::decode_token(token, &SHARED_KEY) {
-                let key: u64 = new_message.author.id.into();
-                let key = key.to_be_bytes().to_vec();
-                new_message.reply(
-                    &ctx.http,
-                    match USERDB.get(&key) {
-                        Ok(Some(_)) => "This Discord account has already been associated with a UT EID. Please contact `support@verifiedbot.com` if you believe this is a mistake.",
-                        Ok(None) => {
-                            USERDB
-                                .insert(key, serde_json::to_vec(&data).expect("Failed to save verified user (Encoding error)"))
-                                .expect("Failed to save verified user (DB error)");
-                            ctx.set_activity(Activity::watching(format!("{} verified students", USERDB.len()))).await;
-                            if let Ok(guildInfos) = ctx.http.get_guilds(&GuildPagination::After(GuildId(0)), 100).await {
-                                for guildInfo in guildInfos {
-                                    if let Ok(guild) = ctx.http.get_guild(guildInfo.id.into()).await {
-                                        if let Ok(members) = guild.members(&ctx.http, None, None).await {
-                                            for mut mem in members {
-                                                if mem.user.id == new_message.author.id {
-                                                    handle_member_status(&ctx, &mut mem).await;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            "You've been verified! Please check participating servers to see a check mark next to your name!"
-                        }
-                        Err(_) => "Oh Snap! Something went wrong on our side. Please try again later."
-                    }
-                ).await.unwrap();
-            }
-        }
-    }
-
     async fn ready(&self, ctx: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
-        ctx.set_activity(Activity::watching(format!(
-            "{} verified students",
-            USERDB.len()
-        )))
-        .await;
-
         let commands = ApplicationCommand::set_global_application_commands(&ctx.http, |commands| {
             commands
                 .create_application_command(|command| {
@@ -260,7 +197,7 @@ impl EventHandler for Handler {
             if let Err(why) = match command.data.name.as_str() {
                 "verify" => handlers::verify(command, ctx).await,
                 "rescan" => match command.guild_id {
-                    Some(guild) => scan(command, guild, ctx).await,
+                    Some(guild) => scan(&self.user_db, command, guild, ctx).await,
                     None => {
                         command
                             .create_interaction_response(&ctx.http, |response| {
@@ -310,8 +247,8 @@ async fn main() {
 
     // Build our client.
     let mut client = Client::builder(token)
-        .intents(GatewayIntents::GUILD_MEMBERS | GatewayIntents::DIRECT_MESSAGES)
-        .event_handler(Handler)
+        .intents(GatewayIntents::GUILD_MEMBERS)
+        .event_handler(Handler { user_db: db::UserDB::new("users").await })
         .application_id(application_id)
         .await
         .expect("Error creating client");

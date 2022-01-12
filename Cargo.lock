@@ -2608,6 +2608,7 @@ dependencies = [
  "jsonwebtoken",
  "lazy_static",
  "reqwest",
+ "serde",
  "serde_json",
  "serenity",
  "sled",
