@@ -1,4 +1,5 @@
 mod handlers;
+mod db;
 
 use std::collections::HashMap;
 use std::{char, env};

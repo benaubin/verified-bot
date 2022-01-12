@@ -17,6 +17,6 @@ base64 = "0.13.0"
 handlebars = "4.2.0"
 lettre = "0.9.6"
 lettre_email = "0.9.4"
-aes-gcm-siv = "0.10.3"
+aes-gcm-siv = { git = "https://github.com/Verified-Bot/AEADs" } 
 jsonwebtoken = "7.2.0"
 cgi = "0.6.0"
