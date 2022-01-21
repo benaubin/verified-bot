@@ -18,6 +18,13 @@ function MyApp({ Component, pageProps }: AppProps) {
         />
       </Head>
       <Component {...pageProps} />
+      
+      
+      <div>
+        <a href="https://vercel.com/?utm_source=verified-bot&utm_campaign=oss">
+          <img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg" alt="Powered by Vercel" />
+        </a>
+      </div>
     </>
   );
 }
