@@ -18,8 +18,6 @@ function MyApp({ Component, pageProps }: AppProps) {
         />
       </Head>
       <Component {...pageProps} />
-      
-      
       <div style={{textAlign: "center"}}>
         <a href="https://vercel.com/?utm_source=verified-bot&utm_campaign=oss" style={{
           margin: 32

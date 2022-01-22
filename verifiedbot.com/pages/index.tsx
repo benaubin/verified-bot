@@ -57,7 +57,7 @@ const Home = ({ oauthLink }: Props) => {
         <p>
           <h2>FAQs:</h2>
           <details id="privacy">
-            <summary>How does Verified Bot protect my privacy?</summary>
+            <summary>What is the Privacy Policy?</summary>
             <p>
               Verified Bot seeks to protect your privacy by minimizing data
               collection as much as possible. When we do need to store your
@@ -87,16 +87,16 @@ const Home = ({ oauthLink }: Props) => {
             <p>
               Your encrypted student ID can be used to uniquely identify you as
               a student of your university, but does not reveal your actual student
-              ID except with knowledge of a secret key. We do not share your
-              unencrypted ID, unless we are obligated to do so by law, or
-              upon request of a university official.
+              ID except with knowledge of a secret key. We will only decrypt your
+              ID if we are obligated to do so by law, or upon request of a
+              university official.
             </p>
             <p>
               To be clear, this is a free service, which is provided as-is without a
               warranty of any kind. We don&apos;t guarantee that the service will operate
               as intended, and as a condition of using our service, you assume all
               risks. You can (and should) read our{" "}
-              <a href="https://github.com/arpan-dhatt/utexas-verify-discord-bot">
+              <a href="https://github.com/verified-bot/verified-bot">
                 source code
               </a>{" "}
               for yourself.
