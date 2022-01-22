@@ -3,7 +3,7 @@ import { NextApiHandler } from "next";
 import { ironOptions } from "../../lib/config";
 import { docClient, User, requestToken } from "../../lib/db";
 
-const RATE_LIMIT = 3 * 1000;
+const RATE_LIMIT = 90 * 1000;
 
 const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
   const { eid, csrf_token } = req.body;
@@ -40,7 +40,11 @@ const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
   } catch (e) {
     if (e instanceof Error) {
       if ((e as any)["code"] == "ConditionalCheckFailedException") {
-        res.status(429).send("Try again in a few seconds.");
+        res
+          .status(429)
+          .send(
+            "Try again in a few minutes, or email support@verifiedbot.com."
+          );
         return;
       }
     }
