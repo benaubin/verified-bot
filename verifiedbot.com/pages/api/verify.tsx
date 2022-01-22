@@ -51,7 +51,7 @@ const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
             },
             UpdateExpression: "set claims = :claims",
             ConditionExpression: "attribute_not_exists(claims)",
-            ExpressionAttributeValues: { ":claims": claims },
+            ExpressionAttributeValues: { ":claims": JSON.stringify(claims) },
           },
         },
       ],
