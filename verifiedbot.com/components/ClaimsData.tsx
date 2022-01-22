@@ -17,7 +17,7 @@ export default function ClaimsData({ claims }: { claims: ReadableClaims }) {
         {Object.entries(claims).map(([k, v]) => {
           return (
             <tr key={k}>
-              <th scope="row">{k.replaceAll("_", " ")}</th>
+              <th scope="row">{k}</th>
               <td>
                 {v instanceof Array
                   ? v.join(";")
