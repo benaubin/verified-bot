@@ -1,8 +1,8 @@
 import Head from "next/head";
-import { Suspense, useMemo, useState } from "react";
+import { useState } from "react";
 import { withIronSessionSsr } from "iron-session/next";
-import { DISCORD_API_BASE, ironOptions } from "../lib/config";
-import { getUser, User } from "../lib/db";
+import { ironOptions } from "../lib/config";
+import { getUser } from "../lib/db";
 import {
   DiscordPartialGuild,
   DiscordUser,

@@ -1,25 +1,9 @@
 import { withIronSessionApiRoute } from "iron-session/next";
 import { NextApiHandler } from "next";
 import { ironOptions } from "../../lib/config";
-import { docClient, User } from "../../lib/db";
-import jwt from "jsonwebtoken";
+import { docClient, User, requestToken } from "../../lib/db";
 
 const RATE_LIMIT = 3 * 1000;
-
-const requestToken = async (eid: string) => {
-  const requestKey = Buffer.from(process.env.REQUEST_KEY!, "base64url");
-  const token = jwt.sign(
-    {
-      ut_eid: eid,
-      aud: "ut-verification-server",
-      sub: "request-token",
-      exp: Math.floor(Date.now() / 1000) + 30,
-    },
-    requestKey
-  );
-
-  console.log(token);
-};
 
 const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
   const { eid, csrf_token } = req.body;
@@ -50,7 +34,7 @@ const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
       ReturnValues: "ALL_NEW"
     }).promise() as any as User;
 
-    requestToken(eid);
+    await requestToken(eid);
 
     res.status(200).send("Verification sent.");
   } catch (e) {
