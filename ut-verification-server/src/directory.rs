@@ -1,5 +1,5 @@
 use super::deterministic_aes;
-use ldap3::{LdapConn, Scope, SearchEntry};
+use ldap3::{Scope, SearchEntry};
 use utv_token::VerifiedClaims;
 
 #[derive(Debug)]
@@ -9,19 +9,20 @@ pub struct Person {
     pub email: String,
 }
 
+
 impl Person {
-    pub fn lookup(eid: &str, encryption_key: &[u8]) -> Result<Person, LookupError> {
-        let mut ldap = LdapConn::new("ldap://directory.utexas.edu:389")?;
-        let (rs, _res) = ldap
+    pub async fn lookup(ldap: &mut ldap3::Ldap, eid: &str, encryption_key: &[u8]) -> Result<Person, LookupError> {
+        let results = ldap
             .search(
                 "dc=directory,dc=utexas,dc=edu",
                 Scope::Subtree,
                 &format!("uid={}", eid),
                 vec!["*"],
-            )?
-            .success()?;
+            )
+            .await?;
 
-        let mut entry = rs
+        let mut entry = results
+            .0
             .into_iter()
             .map(|r| SearchEntry::construct(r))
             .find(|e| match e.attrs.get("utexasEduPersonEid") {

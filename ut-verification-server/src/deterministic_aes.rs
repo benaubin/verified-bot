@@ -1,8 +1,5 @@
-//! Deterministic aes-gcm aead encryption
-//!
-//! Based on ActiveRecord's strategy of using an hmac digest of
-//! the encrypted plaintext as the encryption nonce.
-//!
+//! Deterministic aes-gcm-siv aead encryption
+//! 
 //! ```
 //! let key: [u8; 32] = rand::random();
 //!
@@ -41,7 +38,6 @@ mod test {
         for _ in 0..10 {
             let msg: [u8; 7] = rand::random();
             let encrypted = encrypt(&msg, &key);
-
             let decrypted = decrypt(&*encrypted, &key).unwrap();
 
             assert_eq!(msg, &*decrypted);
