@@ -6,8 +6,7 @@ import { getUser, User } from "../lib/db";
 import {
   DiscordPartialGuild,
   DiscordUser,
-  getDiscordAddBotLink,
-  getDiscordGuilds,
+  getDiscordGuildsForUser,
   getDiscordUser,
   PERMISSIONS,
 } from "../lib/discord";
@@ -35,7 +34,7 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
   const [discordUser, user, guilds] = await Promise.all([
     getDiscordUser(discordAuth.token),
     getUser(discordAuth.id),
-    getDiscordGuilds(discordAuth.token),
+    getDiscordGuildsForUser(discordAuth.token),
   ]);
 
   const claims = (user?.claims) ? readableClaims(user.claims) : null;
@@ -177,10 +176,9 @@ export default function App({ discordUser, claims, guilds }: Props) {
             <ul>
               {managedGuilds.map((guild) => (
                 <li key={guild.id}>
-                  {guild.name}{" "}
-                  <a href={getDiscordAddBotLink(guild.id)} target="_top">
-                    Add
-                  </a>
+                  <Link href={`/guild/[guild_id]`} as={`/guild/${guild.id}`}>
+                    {guild.name}
+                  </Link>
                 </li>
               ))}
             </ul>

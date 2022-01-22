@@ -18,6 +18,74 @@ export const getDiscordUser = async (token: string) => {
   return (await res.json()) as DiscordUser;
 };
 
+export interface DiscordGuildMember {
+  roles: string[];
+  permissions?: string;
+}
+
+export const getGuildMember = async (
+  guildId: string,
+  userId: string
+): Promise<DiscordGuildMember> => {
+  const res = await fetch(
+    DISCORD_API_BASE + "/guilds/" + encodeURIComponent(guildId) + "/members/" + encodeURIComponent(userId),
+    {
+      headers: new Headers({
+        authorization: "Bearer " + process.env.DISCORD_BOT_TOKEN!,
+      }),
+    }
+  );
+  if (res.ok) {
+    return (await res.json()) as DiscordGuildMember;
+  } else {
+    throw await res.json();
+  }
+};
+
+export const getDiscordGuildBotMember = async (
+  guildId: string
+): Promise<DiscordGuildMember> => {
+  return await getGuildMember(
+    guildId,
+    process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID!
+  );
+};
+
+export interface DiscordGuild {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+export interface DiscordGuildRole {
+  "id": string,
+  "name": string,
+  "permissions": string,
+  "position": number,
+  "color": number,
+  "hoist": boolean,
+  "managed": boolean,
+  "mentionable": boolean
+}
+
+export const getDiscordGuild = async (guildId: string): Promise<DiscordGuild> => {
+  const res = await fetch(
+    DISCORD_API_BASE +
+      "/guilds/" +
+      encodeURIComponent(guildId),
+    {
+      headers: new Headers({
+        authorization: "Bearer " + process.env.DISCORD_BOT_TOKEN!,
+      }),
+    }
+  );
+  if (res.ok) {
+    return (await res.json()) as DiscordGuild;
+  } else {
+    throw await res.json();
+  }
+}
+
 export interface DiscordPartialGuild {
   "id": string,
   "name": string,
@@ -26,8 +94,7 @@ export interface DiscordPartialGuild {
   "permissions": string,
   "features": string[]
 }
-
-export const getDiscordGuilds = async (token: string) => {
+export const getDiscordGuildsForUser = async (token: string) => {
   const res = await fetch(DISCORD_API_BASE + "/users/@me/guilds", {
     headers: new Headers({
       authorization: "Bearer " + token,
@@ -56,7 +123,7 @@ export namespace PERMISSIONS {
     MANAGE_ROLES;
 }
 
-export const getDiscordOauthLink = async (ctx: GetServerSidePropsContext) => {
+export const getDiscordOauthLink = async (ctx: GetServerSidePropsContext, guild_id?: string) => {
   const { session } = ctx.req;
   if (session.oauthState == null) {
     session.oauthState = (await import("crypto"))
@@ -64,26 +131,22 @@ export const getDiscordOauthLink = async (ctx: GetServerSidePropsContext) => {
       .toString("base64url");
     await session.save();
   }
-  const oauthLink =
-    `https://discord.com/api/oauth2/authorize?response_type=code` +
-    `&client_id=${encodeURIComponent(
-      process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID!
-    )}` +
-    `&redirect_uri=${encodeURIComponent(
-      process.env.NEXT_PUBLIC_DISCORD_REDIRECT!
-    )}` +
-    `&state=${encodeURIComponent((session as any).oauthState)}` +
-    `&scope=${encodeURIComponent(["identify", "guilds"].join(" "))}`;
-  return oauthLink;
+
+  const opts = {
+    client_id: process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID!,
+    redirect_uri: process.env.NEXT_PUBLIC_DISCORD_REDIRECT!,
+    state: session.oauthState,
+    scope: "identify guilds",
+    response_type: "code"
+  } as Record<string, string>;
+
+  if (guild_id) {
+    opts["scope"] += " bot";
+    opts["permissions"] = PERMISSIONS.requested.toString();
+    opts["guild_id"] = guild_id;
+  }
+
+  const q = Object.entries(opts).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+  return "https://discord.com/api/oauth2/authorize?" + q;
 }
 
-export const getDiscordAddBotLink = (guild_id?: string) => {
-  return (
-    `https://discord.com/api/oauth2/authorize?client_id=${encodeURIComponent(
-      process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID!
-    )}` +
-    `&scope=bot` +
-    `&permissions=${PERMISSIONS.requested}` +
-    (guild_id ? `&guild_id=${guild_id}` : "")
-  );
-};

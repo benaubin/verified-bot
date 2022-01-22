@@ -4,7 +4,6 @@ import { ironOptions } from "../lib/config";
 import { getUser } from "../lib/db";
 import {
   DiscordUser,
-  getDiscordAddBotLink,
   getDiscordUser,
   PERMISSIONS,
 } from "../lib/discord";
@@ -106,7 +105,7 @@ export default function Verify({ discordUser }: Props) {
       <main>
         <h1>Verified Bot</h1>
 
-        <p>Hi! You're about to verify your UT EID.</p>
+        <p>Hi! You&apos;re about to verify your UT EID.</p>
 
         <p>Before you do that, you should know a few things:</p>
 
@@ -127,17 +126,17 @@ export default function Verify({ discordUser }: Props) {
           </li>
           <li>
             We may share your EID with university officials upon request, such
-            as to investigate a harassment incident. Where permitted, we'll
+            as to investigate a harassment incident. Where permitted, we&apos;ll
             notify you if this occurs.
           </li>
           <li>
             This is a free service, provided as-is, and you assume all risks of
             using it. If you want to verify our privacy measures, read our {" "}
-            <a target="_blank" href="https://github.com/arpan-dhatt/utexas-verify-discord-bot">source code</a>.
+            <a target="_blank" href="https://github.com/verified-bot/verified-bot" rel="noreferrer">source code</a>.
           </li>
         </ol>
 
-        <p>You're verifying this Discord account:</p>
+        <p>You&apos;re verifying this Discord account:</p>
 
         <div className="discord-info">
           <img
