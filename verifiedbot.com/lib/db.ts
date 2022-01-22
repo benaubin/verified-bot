@@ -14,7 +14,8 @@ import { VerifiedClaims } from "./token";
 export interface User {
   discord_id: String;
   token_requested_at: number;
-  claims: VerifiedClaims;
+  encrypted_eid: String;
+  claims: string;
 }
 
 export const docClient = new DynamoDB.DocumentClient();

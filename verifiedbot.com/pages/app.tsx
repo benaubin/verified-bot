@@ -16,7 +16,7 @@ import ClaimsData, { readableClaims, ReadableClaims } from "../components/Claims
 
 interface Props {
   discordUser: DiscordUser;
-  claims: ReadableClaims;
+  claims: ReadableClaims | false;
   guilds: DiscordPartialGuild[];
 }
 
@@ -37,7 +37,7 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
     getDiscordGuildsForUser(discordAuth.token),
   ]);
 
-  const claims = (user?.claims) ? readableClaims(user.claims) : null;
+  const claims = user && user.claims ? JSON.parse(user.claims) : false;
   return {
     props: { discordUser, guilds, claims },
   };

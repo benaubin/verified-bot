@@ -2,7 +2,7 @@ import { AWSError } from "aws-sdk";
 import { withIronSessionApiRoute } from "iron-session/next";
 import { NextApiHandler } from "next";
 import { ironOptions } from "../../lib/config";
-import { docClient, User } from "../../lib/db";
+import { docClient } from "../../lib/db";
 import { decodeToken } from "../../lib/token";
 
 const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
@@ -18,45 +18,45 @@ const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
     return;
   }
 
-  console.log(token);
-  const claims = decodeToken(token);
-  if (!claims) {
+  const payload = decodeToken(token);
+  if (!payload) {
     res.status(401).send("Bad token");
     return;
   }
 
-  claims.encrypted_eid = Buffer.from(claims.encrypted_eid);
+  let {encrypted_eid, ...claims} = payload;
+  encrypted_eid = Buffer.from(encrypted_eid);
 
-  const tr = docClient.transactWrite(
-    {
-      TransactItems: [
-        {
-          Update: {
-            TableName: "ut_eids",
-            Key: {
-              encrypted_eid: claims.encrypted_eid,
-            },
-            UpdateExpression: "set discord_id = :discord_id",
-            ConditionExpression: "attribute_not_exists(discord_id)",
-            ExpressionAttributeValues: {
-              ":discord_id": discord_id,
-            },
+  const tr = docClient.transactWrite({
+    TransactItems: [
+      {
+        Update: {
+          TableName: "ut_eids",
+          Key: {
+            encrypted_eid,
+          },
+          UpdateExpression: "set discord_id = :discord_id",
+          ConditionExpression:
+            "attribute_not_exists(discord_id) OR discord_id = :discord_id",
+          ExpressionAttributeValues: {
+            ":discord_id": discord_id,
           },
         },
-        {
-          Update: {
-            TableName: "users",
-            Key: {
-              discord_id,
-            },
-            UpdateExpression: "set claims = :claims",
-            ConditionExpression: "attribute_not_exists(claims)",
-            ExpressionAttributeValues: { ":claims": JSON.stringify(claims) },
+      },
+      {
+        Update: {
+          TableName: "users",
+          Key: {
+            discord_id,
           },
+          UpdateExpression:
+            "set encrypted_eid = :encrypted_eid, claims = :claims",
+          ConditionExpression: "attribute_not_exists(encrypted_eid)",
+          ExpressionAttributeValues: { ":encrypted_eid": encrypted_eid, ":claims": JSON.stringify(claims) },
         },
-      ],
-    }
-  );
+      },
+    ],
+  });
 
   let cancellationReasons: AWSError[] = [];
   tr.on("extractError", (r) => {
