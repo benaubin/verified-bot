@@ -87,7 +87,7 @@ export default function Verify({ discordUser }: Props) {
     const byteStr = atob(token.replaceAll("-", "+").replaceAll("_", "/"));
     const buf = new Uint8Array(byteStr.length - 32);
     for (let i = 0; i < buf.length; i++) buf[i] = byteStr.charCodeAt(i);
-    const [encrypted_eid, major, school, affiliation] = decode(buf) as [Buffer, String[], String[], String[]];
+    const [encrypted_eid, major, school, affiliation] = decode(buf) as [number[], String[], String[], String[]];
     setClaims(readableClaims({ encrypted_eid, major, school, affiliation }));
   }, []);
 

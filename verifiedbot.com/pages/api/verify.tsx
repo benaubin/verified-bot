@@ -24,8 +24,8 @@ const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
     return;
   }
 
-  let {encrypted_eid, ...claims} = payload;
-  encrypted_eid = Buffer.from(encrypted_eid);
+  const { encrypted_eid: encrypted_eid_bytes, ...claims } = payload;
+  const encrypted_eid = Buffer.from(encrypted_eid_bytes);
 
   const tr = docClient.transactWrite({
     TransactItems: [
