@@ -1,7 +1,9 @@
 mod handlers;
 mod db;
 
+use std::collections::HashMap;
 use std::env;
+use std::future::Future;
 
 use lazy_static::lazy_static;
 use serenity::model::guild::{
@@ -25,23 +27,13 @@ use serenity::{
     prelude::*,
 };
 
-lazy_static! {
-    static ref ROLEDB: sled::Db = sled::open("role_db").unwrap();
-    static ref SHARED_KEY: Vec<u8> = {
-        let key = std::env::var("SHARED_KEY").expect("SHARED_KEY env variable missing");
-        base64::decode_config(key, base64::URL_SAFE_NO_PAD)
-            .expect("Failed to decode base64 SHARED_KEY")
-    };
-}
-
 struct Handler {
-    db_client: &'static db::UserDB,
-
+    db_client: &'static db::DynamoDB,
 }
 
 /// Scans all users in the guild to check nickname compliance
 async fn rescan(
-    user_db: &'static db::UserDB,
+    user_db: &'static db::DynamoDB,
     command: ApplicationCommandInteraction,
     guild: GuildId,
     ctx: Context,
@@ -74,7 +66,7 @@ async fn rescan(
 }
 
 async fn scan(
-    user_db: &'static db::UserDB,
+    user_db: &'static db::DynamoDB,
     guild_id: GuildId,
     ctx: Context,
 ) -> serenity::Result<String> {
@@ -101,19 +93,24 @@ async fn scan(
 }
 
 /// Modifies the name and roles of the user to either sanitize it or assign it the ✓
-async fn handle_member_status(user_db: &db::UserDB, ctx: &Context, mem: &mut Member) -> bool {
-    let guild = ctx.http.get_guild(mem.guild_id.into()).await.unwrap();
-    let verified_role = get_verified_role(&ctx, &guild).await;
+async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut Member) -> bool {
+    let role_mappings = db_client.get_role_config(mem.guild_id).await;
     let original = mem.display_name().to_string();
     let mut cleaned = mem.display_name().replace("✓", "_");
-    if user_db.user_exists(mem.user.id.into()).await {
-        // verified
-        if !mem.roles.contains(&verified_role.id) {
-            mem.add_role(&ctx.http, verified_role.id).await.unwrap();
+    if let Some(user_data) = db_client.get_user(mem.user.id.into()).await {
+        for affiliation in &user_data.claims.affiliation {
+            if let Some(role_id) = role_mappings.get(affiliation) {
+                if !mem.roles.contains(&RoleId(*role_id)) {
+                    mem.add_role(&ctx.http, RoleId(*role_id)).await.unwrap()
+                }
+            }
         }
-        if !original.ends_with("✓") {
-            cleaned.push_str(" ✓");
-        } else {
+        if user_data.claims.affiliation.contains(&"student".to_string()) {
+            if !original.ends_with("✓") {
+                cleaned.push_str(" ✓");
+            }
+        }
+        else {
             return true;
         }
     }
@@ -122,37 +119,6 @@ async fn handle_member_status(user_db: &db::UserDB, ctx: &Context, mem: &mut Mem
     } else {
         false
     }
-}
-
-/// Gets the Verified Role and Creates it if needed
-async fn get_verified_role<'a>(ctx: &'a Context, guild: &'a PartialGuild) -> &'a Role {
-    let key: u64 = guild.id.into();
-    let key: Vec<u8> = key.to_be_bytes().to_vec();
-    let role_id = match ROLEDB.get(&key).unwrap() {
-        Some(value) => {
-            let role_id = RoleId(u64::from_be_bytes(
-                value.to_vec().as_slice().try_into().unwrap(),
-            ));
-            guild.roles.get(&role_id).unwrap().id
-        }
-        None => {
-            let new_role = guild
-                .create_role(&ctx.http, |r| {
-                    r.name("UTexas Verified")
-                        .hoist(true)
-                        .mentionable(true)
-                        .colour(0xbf5700)
-                })
-                .await
-                .unwrap();
-            ROLEDB
-                .insert(key, new_role.id.as_u64().to_be_bytes().to_vec())
-                .unwrap();
-            new_role.id
-        }
-    };
-    let role = guild.roles.get(&role_id).unwrap();
-    role
 }
 
 #[async_trait]
@@ -263,7 +229,7 @@ async fn main() {
         .expect("application id is not a valid id");
 
     // DynamoDB Client
-    let db_client = Box::leak(Box::new(db::UserDB::new("users").await));
+    let db_client = Box::leak(Box::new(db::DynamoDB::new("users").await));
     // Build our client.
     let mut client = Client::builder(token)
         .intents(GatewayIntents::GUILD_MEMBERS)
