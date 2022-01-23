@@ -35,16 +35,17 @@ lazy_static! {
 }
 
 struct Handler {
-    user_db: db::UserDB
+    db_client: &'static db::UserDB
 }
 
 /// Scans all users in the guild to check nickname compliance
-async fn scan(
-    user_db: &db::UserDB,
+async fn rescan(
+    user_db: &'static db::UserDB,
     command: ApplicationCommandInteraction,
     guild: GuildId,
     ctx: Context,
 ) -> serenity::Result<()> {
+    let output;
     if !command
         .member
         .as_ref()
@@ -53,31 +54,49 @@ async fn scan(
         .unwrap()
         .administrator()
     {
-        return command
-            .create_interaction_response(&ctx.http, |interaction| {
-                interaction
-                    .kind(InteractionResponseType::ChannelMessageWithSource)
-                    .interaction_response_data(|message| {
-                        message.create_embed(|embed| {
-                            embed.title("You must be a guild admin to run this command.")
-                        })
-                    })
-            })
-            .await;
-    }
-    let guild = ctx.http.get_guild(guild.into()).await?;
-    for mut member in guild.members(&ctx.http, None, None).await? {
-        handle_member_status(user_db, &ctx, &mut member).await;
+        output = "You must be an administrator to run this command.".to_string();
+    } else {
+        output = match scan(user_db, guild, ctx.clone()).await {
+            Ok(n) => format!("Command Sent Successfully (should complete in {} seconds)", n),
+            Err(e) => format!("Command Failed: {}", e.to_string())
+        };
     }
     command
         .create_interaction_response(&ctx.http, |interaction| {
             interaction
                 .kind(InteractionResponseType::ChannelMessageWithSource)
                 .interaction_response_data(|message| {
-                    message.create_embed(|embed| embed.title("Command Completed"))
+                    message.create_embed(|embed| embed.title(output))
                 })
         })
         .await
+}
+
+async fn scan(
+    user_db: &'static db::UserDB,
+    guild_id: GuildId,
+    ctx: Context,
+) -> serenity::Result<String> {
+    let guild = ctx.http.get_guild(guild_id.into()).await?;
+    let mut guild_members = guild.members(&ctx.http, None, None).await?;
+    let numbers = match guild_members.len() {
+        1000 => "≥250".to_string(),
+        _ => format!("~{}", guild_members.len() / 10)
+    };
+    tokio::spawn(async move {
+        // for pagination
+        while guild_members.len() > 0 {
+            let mut last_id = None;
+            for mut member in &mut guild_members {
+                handle_member_status(user_db, &ctx, &mut member).await;
+                last_id = Some(member.user.id);
+                // sleep to stay far away from rate limit
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            guild_members = guild.members(&ctx.http, None, last_id).await.unwrap();
+        }
+    });
+    Ok(numbers)
 }
 
 /// Modifies the name and roles of the user to either sanitize it or assign it the ✓
@@ -98,8 +117,7 @@ async fn handle_member_status(user_db: &db::UserDB, ctx: &Context, mem: &mut Mem
         }
     }
     if original != cleaned {
-        mem.edit(&ctx.http, |m| m.nickname(cleaned)).await;
-        true
+        mem.edit(&ctx.http, |m| m.nickname(cleaned)).await.is_ok()
     } else {
         false
     }
@@ -140,19 +158,19 @@ async fn get_verified_role<'a>(ctx: &'a Context, guild: &'a PartialGuild) -> &'a
 impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild) {
         for (_, mut member) in guild.members {
-            handle_member_status(&self.user_db, &ctx, &mut member).await;
+            handle_member_status(self.db_client, &ctx, &mut member).await;
         }
     }
 
     async fn guild_member_addition(&self, ctx: Context, guild_id: GuildId, mut new_member: Member) {
-        handle_member_status(&self.user_db, &ctx, &mut new_member).await;
+        handle_member_status(self.db_client, &ctx, &mut new_member).await;
     }
 
     async fn guild_member_update(&self, ctx: Context, update: GuildMemberUpdateEvent) {
         if let Some(new_nick) = update.nick {
             if let Ok(guild) = ctx.http.get_guild(update.guild_id.into()).await {
                 if let Ok(mut member) = guild.member(&ctx.http, update.user.id).await {
-                    handle_member_status(&self.user_db, &ctx, &mut member).await;
+                    handle_member_status(self.db_client, &ctx, &mut member).await;
                 }
             }
         }
@@ -181,7 +199,7 @@ impl EventHandler for Handler {
                 .create_application_command(|command| {
                     command
                         .name("rescan")
-                        .description("Check all users in the guild for nickname compliance")
+                        .description("Check all users in the guild for nickname compliance and role assignment")
                 })
         })
         .await;
@@ -197,7 +215,7 @@ impl EventHandler for Handler {
             if let Err(why) = match command.data.name.as_str() {
                 "verify" => handlers::verify(command, ctx).await,
                 "rescan" => match command.guild_id {
-                    Some(guild) => scan(&self.user_db, command, guild, ctx).await,
+                    Some(guild) => rescan(self.db_client, command, guild, ctx).await,
                     None => {
                         command
                             .create_interaction_response(&ctx.http, |response| {
@@ -245,10 +263,12 @@ async fn main() {
         .parse()
         .expect("application id is not a valid id");
 
+    // DynamoDB Client
+    let db_client = Box::leak(Box::new(db::UserDB::new("users").await));
     // Build our client.
     let mut client = Client::builder(token)
         .intents(GatewayIntents::GUILD_MEMBERS)
-        .event_handler(Handler { user_db: db::UserDB::new("users").await })
+        .event_handler(Handler { db_client })
         .application_id(application_id)
         .await
         .expect("Error creating client");
