@@ -35,7 +35,8 @@ lazy_static! {
 }
 
 struct Handler {
-    db_client: &'static db::UserDB
+    db_client: &'static db::UserDB,
+
 }
 
 /// Scans all users in the guild to check nickname compliance
@@ -157,9 +158,7 @@ async fn get_verified_role<'a>(ctx: &'a Context, guild: &'a PartialGuild) -> &'a
 #[async_trait]
 impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild) {
-        for (_, mut member) in guild.members {
-            handle_member_status(self.db_client, &ctx, &mut member).await;
-        }
+        scan(self.db_client, guild.id, ctx).await.unwrap();
     }
 
     async fn guild_member_addition(&self, ctx: Context, guild_id: GuildId, mut new_member: Member) {
