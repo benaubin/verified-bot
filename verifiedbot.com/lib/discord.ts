@@ -19,6 +19,7 @@ export const getDiscordUser = async (token: string) => {
 };
 
 export interface DiscordGuildMember {
+  nick: string;
   roles: string[];
   permissions?: string;
 }
@@ -41,6 +42,26 @@ export const getGuildMember = async (
     throw await res.json();
   }
 };
+
+export const setMemberNick = async(guildId: string, userId: string, new_nick: string) => {
+  const res = await fetch(
+      DISCORD_API_BASE + "/guilds/" + encodeURIComponent(guildId) + "/members/" + encodeURIComponent(userId),
+      {
+        method: "patch",
+        body: JSON.stringify({
+          nick: new_nick
+        }),
+        headers: new Headers({
+          authorization: "Bearer " + process.env.DISCORD_BOT_TOKEN!,
+        }),
+      }
+  );
+  if (res.ok) {
+    return (await res.json()) as DiscordGuildMember;
+  } else {
+    throw await res.json();
+  }
+}
 
 export const getDiscordGuildBotMember = async (
   guildId: string
@@ -141,7 +162,7 @@ export const getDiscordOauthLink = async (ctx: GetServerSidePropsContext, guild_
   } as Record<string, string>;
 
   if (guild_id) {
-    opts["scope"] += " bot";
+    opts["scope"] += " bot applications.commands";
     opts["permissions"] = PERMISSIONS.requested.toString();
     opts["guild_id"] = guild_id;
   }

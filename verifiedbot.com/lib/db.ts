@@ -18,6 +18,13 @@ export interface User {
   claims: string;
 }
 
+export interface GuildRoles {
+  guild_id: String;
+  affiliation_roles: {String: number};
+  school_roles: {String: number};
+  major_roles: {String: number}
+}
+
 export const docClient = new DynamoDB.DocumentClient();
 
 export const getUser = async (discord_id: string) => {
@@ -27,6 +34,30 @@ export const getUser = async (discord_id: string) => {
   return user.Item as any as User;
 };
 
+export const getGuildRoles = async (guild_id: string) => {
+  const guild_roles = await docClient
+      .get( { TableName: "guilds", Key: { guild_id }})
+      .promise();
+  return guild_roles.Item as any as GuildRoles;
+};
+
+export const setGuildRolesAttribute = async (guild_id: string, attribute: string, data: {String: number}) => {
+  // guard against other table changes
+  if (!["affiliation_roles", "major_roles", "school_roles"].includes(attribute)) {
+    return null;
+  }
+  let _ = await docClient.update({
+    TableName: "guilds",
+    Key: {
+      guild_id
+    },
+    UpdateExpression: `set ${attribute} = :data`,
+    ExpressionAttributeValues: {
+      ":data": JSON.stringify(data),
+    },
+    ReturnValues: "ALL_NEW"
+  }).promise() as any as GuildRoles;
+}
 
 const SQS_QueueUrl =
   "https://sqs.us-east-1.amazonaws.com/402762806873/eid_verification_requests";

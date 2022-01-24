@@ -108,7 +108,9 @@ async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut
                 }
             }
         }
-        mem.add_roles(&ctx.http, &roles_to_add).await.unwrap();
+        if !mem.add_roles(&ctx.http, &roles_to_add).await.is_ok() {
+            eprintln!("Failed to Add Roles to {}", original);
+        }
         if user_claims.affiliation.contains(&"student".to_string()) {
             if !original.ends_with("✓") {
                 cleaned.push_str(" ✓");
