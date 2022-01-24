@@ -97,13 +97,18 @@ async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut
     let original = mem.display_name().to_string();
     let mut cleaned = mem.display_name().replace("✓", "_");
     if let Some(user_claims) = db_client.get_user(mem.user.id.into()).await {
-        for affiliation in &user_claims.affiliation {
-            if let Some(role_id) = role_mappings.get(affiliation) {
+        let mut roles_to_add = Vec::new();
+        let mut user_tags = user_claims.affiliation.clone();
+        user_tags.extend(user_claims.major.clone());
+        user_tags.extend(user_claims.school.clone());
+        for tag in &user_tags {
+            if let Some(role_id) = role_mappings.get(tag) {
                 if !mem.roles.contains(&RoleId(*role_id)) {
-                    mem.add_role(&ctx.http, RoleId(*role_id)).await.unwrap()
+                    roles_to_add.push(RoleId(*role_id));
                 }
             }
         }
+        mem.add_roles(&ctx.http, &roles_to_add).await.unwrap();
         if user_claims.affiliation.contains(&"student".to_string()) {
             if !original.ends_with("✓") {
                 cleaned.push_str(" ✓");
