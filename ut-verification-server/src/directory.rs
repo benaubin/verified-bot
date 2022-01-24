@@ -6,7 +6,7 @@ use utv_token::VerifiedClaims;
 pub struct Person {
     pub claims: VerifiedClaims,
     pub name: String,
-    pub email: String,
+    pub email: Option<String>,
 }
 
 
@@ -59,8 +59,7 @@ impl Person {
             email: entry
                 .attrs
                 .remove("mail")
-                .and_then(|a| a.into_iter().next())
-                .ok_or(LookupError::MissingDirectoryInfo("email"))?,
+                .and_then(|a| a.into_iter().next()),
         };
 
         Ok(person)
