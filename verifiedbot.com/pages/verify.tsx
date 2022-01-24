@@ -27,7 +27,7 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
     return {
       redirect: {
         statusCode: 303,
-        destination: "/",
+        destination: "/#",
       },
     };
   }
