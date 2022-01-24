@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::env;
 use std::future::Future;
 
-use lazy_static::lazy_static;
 use serenity::model::guild::{
     Guild, Member, PartialGuild, Role
 };
@@ -77,11 +76,12 @@ async fn scan(
         _ => format!("~{}", guild_members.len() / 10)
     };
     tokio::spawn(async move {
+        let role_mappings = user_db.get_role_config(guild_id).await;
         // for pagination
         while guild_members.len() > 0 {
             let mut last_id = None;
             for mut member in &mut guild_members {
-                handle_member_status(user_db, &ctx, &mut member).await;
+                handle_member_status(user_db, &ctx, &mut member, &role_mappings).await;
                 last_id = Some(member.user.id);
                 // sleep to stay far away from rate limit
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -93,19 +93,18 @@ async fn scan(
 }
 
 /// Modifies the name and roles of the user to either sanitize it or assign it the ✓
-async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut Member) -> bool {
-    let role_mappings = db_client.get_role_config(mem.guild_id).await;
+async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut Member, role_mappings: &HashMap<String, u64>) -> bool {
     let original = mem.display_name().to_string();
     let mut cleaned = mem.display_name().replace("✓", "_");
-    if let Some(user_data) = db_client.get_user(mem.user.id.into()).await {
-        for affiliation in &user_data.claims.affiliation {
+    if let Some(user_claims) = db_client.get_user(mem.user.id.into()).await {
+        for affiliation in &user_claims.affiliation {
             if let Some(role_id) = role_mappings.get(affiliation) {
                 if !mem.roles.contains(&RoleId(*role_id)) {
                     mem.add_role(&ctx.http, RoleId(*role_id)).await.unwrap()
                 }
             }
         }
-        if user_data.claims.affiliation.contains(&"student".to_string()) {
+        if user_claims.affiliation.contains(&"student".to_string()) {
             if !original.ends_with("✓") {
                 cleaned.push_str(" ✓");
             }
@@ -128,14 +127,16 @@ impl EventHandler for Handler {
     }
 
     async fn guild_member_addition(&self, ctx: Context, guild_id: GuildId, mut new_member: Member) {
-        handle_member_status(self.db_client, &ctx, &mut new_member).await;
+        let role_mappings = self.db_client.get_role_config(guild_id).await;
+        handle_member_status(self.db_client, &ctx, &mut new_member, &role_mappings).await;
     }
 
     async fn guild_member_update(&self, ctx: Context, update: GuildMemberUpdateEvent) {
         if let Some(new_nick) = update.nick {
             if let Ok(guild) = ctx.http.get_guild(update.guild_id.into()).await {
+                let role_mappings = self.db_client.get_role_config(guild.id).await;
                 if let Ok(mut member) = guild.member(&ctx.http, update.user.id).await {
-                    handle_member_status(self.db_client, &ctx, &mut member).await;
+                    handle_member_status(self.db_client, &ctx, &mut member, &role_mappings).await;
                 }
             }
         }
