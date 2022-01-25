@@ -115,13 +115,11 @@ async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut
                 }
             }
         }
-        if !mem.add_roles(&ctx.http, &roles_to_add).await.is_ok() {
+        if roles_to_add.len() > 0 && !mem.add_roles(&ctx.http, &roles_to_add).await.is_ok() {
             eprintln!("Failed to Add Roles to {}", original);
         }
         if user_claims.affiliation.contains(&"student".to_string()) {
-            if !original.ends_with("✓") {
-                cleaned.push_str(" ✓");
-            }
+            cleaned.push_str(" ✓");
         }
         else {
             return true;
@@ -156,12 +154,10 @@ impl EventHandler for Handler {
                 return;
             }
         }
-        if let Some(new_nick) = update.nick {
-            if let Ok(guild) = ctx.http.get_guild(update.guild_id.into()).await {
-                let role_mappings = self.db_client.get_role_config(guild.id).await;
-                if let Ok(mut member) = guild.member(&ctx.http, update.user.id).await {
-                    handle_member_status(self.db_client, &ctx, &mut member, &role_mappings, self.ignore_set.clone()).await;
-                }
+        if let Ok(guild) = ctx.http.get_guild(update.guild_id.into()).await {
+            let role_mappings = self.db_client.get_role_config(guild.id).await;
+            if let Ok(mut member) = guild.member(&ctx.http, update.user.id).await {
+                handle_member_status(self.db_client, &ctx, &mut member, &role_mappings, self.ignore_set.clone()).await;
             }
         }
     }
