@@ -1,15 +1,16 @@
 mod handlers;
 mod db;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::future::Future;
+use std::sync::Arc;
 
 use serenity::model::guild::{
     Guild, Member, PartialGuild, Role
 };
 use serenity::model::id::{
-    GuildId, RoleId,
+    GuildId, RoleId, UserId,
 };
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
 use serenity::{
@@ -26,8 +27,12 @@ use serenity::{
     prelude::*,
 };
 
+type IgnoreSet = Arc<tokio::sync::Mutex<HashSet<UserId>>>;
+
 struct Handler {
     db_client: &'static db::DynamoDB,
+    // used to ignore an additional invocation of GuildMemberUpdateEvent
+    ignore_set: IgnoreSet
 }
 
 /// Scans all users in the guild to check nickname compliance
@@ -36,6 +41,7 @@ async fn rescan(
     command: ApplicationCommandInteraction,
     guild: GuildId,
     ctx: Context,
+    ignore_set: IgnoreSet,
 ) -> serenity::Result<()> {
     let output;
     if !command
@@ -48,7 +54,7 @@ async fn rescan(
     {
         output = "You must be an administrator to run this command.".to_string();
     } else {
-        output = match scan(user_db, guild, ctx.clone()).await {
+        output = match scan(user_db, guild, ctx.clone(), ignore_set.clone()).await {
             Ok(n) => format!("Command Sent Successfully (should complete in {} seconds)", n),
             Err(e) => format!("Command Failed: {}", e.to_string())
         };
@@ -68,6 +74,7 @@ async fn scan(
     user_db: &'static db::DynamoDB,
     guild_id: GuildId,
     ctx: Context,
+    ignore_set: IgnoreSet,
 ) -> serenity::Result<String> {
     let guild = ctx.http.get_guild(guild_id.into()).await?;
     let mut guild_members = guild.members(&ctx.http, None, None).await?;
@@ -81,7 +88,7 @@ async fn scan(
         while guild_members.len() > 0 {
             let mut last_id = None;
             for mut member in &mut guild_members {
-                handle_member_status(user_db, &ctx, &mut member, &role_mappings).await;
+                handle_member_status(user_db, &ctx, &mut member, &role_mappings, ignore_set.clone()).await;
                 last_id = Some(member.user.id);
                 // sleep to stay far away from rate limit
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -93,9 +100,9 @@ async fn scan(
 }
 
 /// Modifies the name and roles of the user to either sanitize it or assign it the ✓
-async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut Member, role_mappings: &HashMap<String, u64>) -> bool {
+async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut Member, role_mappings: &HashMap<String, u64>, ignore_set: IgnoreSet) -> bool {
     let original = mem.display_name().to_string();
-    let mut cleaned = mem.display_name().replace("✓", "_");
+    let mut cleaned = mem.display_name().replace(|c: char| !c.is_ascii(), "").trim().to_string();
     if let Some(user_claims) = db_client.get_user(mem.user.id.into()).await {
         let mut roles_to_add = Vec::new();
         let mut user_tags = user_claims.affiliation.clone();
@@ -121,6 +128,9 @@ async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut
         }
     }
     if original != cleaned {
+        {
+            ignore_set.lock().await.insert(mem.user.id);
+        }
         mem.edit(&ctx.http, |m| m.nickname(cleaned)).await.is_ok()
     } else {
         false
@@ -130,20 +140,27 @@ async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut
 #[async_trait]
 impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild) {
-        scan(self.db_client, guild.id, ctx).await.unwrap();
+        scan(self.db_client, guild.id, ctx, self.ignore_set.clone()).await.unwrap();
     }
 
     async fn guild_member_addition(&self, ctx: Context, guild_id: GuildId, mut new_member: Member) {
         let role_mappings = self.db_client.get_role_config(guild_id).await;
-        handle_member_status(self.db_client, &ctx, &mut new_member, &role_mappings).await;
+        handle_member_status(self.db_client, &ctx, &mut new_member, &role_mappings, self.ignore_set.clone()).await;
     }
 
     async fn guild_member_update(&self, ctx: Context, update: GuildMemberUpdateEvent) {
+        {
+            let mut ignore_set = self.ignore_set.lock().await;
+            if ignore_set.contains(&update.user.id) {
+                ignore_set.remove(&update.user.id);
+                return;
+            }
+        }
         if let Some(new_nick) = update.nick {
             if let Ok(guild) = ctx.http.get_guild(update.guild_id.into()).await {
                 let role_mappings = self.db_client.get_role_config(guild.id).await;
                 if let Ok(mut member) = guild.member(&ctx.http, update.user.id).await {
-                    handle_member_status(self.db_client, &ctx, &mut member, &role_mappings).await;
+                    handle_member_status(self.db_client, &ctx, &mut member, &role_mappings, self.ignore_set.clone()).await;
                 }
             }
         }
@@ -188,7 +205,7 @@ impl EventHandler for Handler {
             if let Err(why) = match command.data.name.as_str() {
                 "verify" => handlers::verify(command, ctx).await,
                 "rescan" => match command.guild_id {
-                    Some(guild) => rescan(self.db_client, command, guild, ctx).await,
+                    Some(guild) => rescan(self.db_client, command, guild, ctx, self.ignore_set.clone()).await,
                     None => {
                         command
                             .create_interaction_response(&ctx.http, |response| {
@@ -238,10 +255,11 @@ async fn main() {
 
     // DynamoDB Client
     let db_client = Box::leak(Box::new(db::DynamoDB::new("users").await));
+    let ignore_set = Arc::new(Mutex::new(HashSet::new()));
     // Build our client.
     let mut client = Client::builder(token)
         .intents(GatewayIntents::GUILD_MEMBERS)
-        .event_handler(Handler { db_client })
+        .event_handler(Handler { db_client, ignore_set })
         .application_id(application_id)
         .await
         .expect("Error creating client");
