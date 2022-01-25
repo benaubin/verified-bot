@@ -22,6 +22,7 @@ export interface DiscordGuildMember {
   nick: string;
   roles: string[];
   permissions?: string;
+  user: DiscordUser;
 }
 
 export const getGuildMember = async (
@@ -32,7 +33,7 @@ export const getGuildMember = async (
     DISCORD_API_BASE + "/guilds/" + encodeURIComponent(guildId) + "/members/" + encodeURIComponent(userId),
     {
       headers: new Headers({
-        authorization: "Bearer " + process.env.DISCORD_BOT_TOKEN!,
+        authorization: "Bot " + process.env.DISCORD_BOT_TOKEN!,
       }),
     }
   );
@@ -52,7 +53,8 @@ export const setMemberNick = async(guildId: string, userId: string, new_nick: st
           nick: new_nick
         }),
         headers: new Headers({
-          authorization: "Bearer " + process.env.DISCORD_BOT_TOKEN!,
+          "Authorization": "Bot " + process.env.DISCORD_BOT_TOKEN!,
+          "Content-Type": "application/json"
         }),
       }
   );
@@ -115,10 +117,10 @@ export interface DiscordPartialGuild {
   "permissions": string,
   "features": string[]
 }
-export const getDiscordGuildsForUser = async (token: string) => {
+export const getDiscordGuildsForUser = async (token: string, client: string = "Bearer") => {
   const res = await fetch(DISCORD_API_BASE + "/users/@me/guilds", {
     headers: new Headers({
-      authorization: "Bearer " + token,
+      authorization: client + " " + token,
     }),
   });
   if (res.ok) {
