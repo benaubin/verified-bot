@@ -251,7 +251,6 @@ impl EventHandler for Handler {
 
                 loop {
                     tokio::time::sleep(Duration::from_secs(1)).await;
-                    println!("polling");
 
                     let out = client
                         .receive_message()
@@ -261,7 +260,6 @@ impl EventHandler for Handler {
                         .await
                         .unwrap();
 
-                    println!("{:#?}", out.messages);
                     let messages = match out.messages {
                         Some(msgs) => msgs,
                         None => continue,
@@ -274,7 +272,6 @@ impl EventHandler for Handler {
                         let req: BecomeVerifiedMessage =
                             serde_json::from_str(&body).expect("invalid message received");
                         let discord_id: u64 = req.discord_id.parse().unwrap_or(0);
-                        println!("Received: {}", discord_id);
                         if let Ok(guilds) = ctx1.http.get_guilds(&GuildPagination::After(GuildId(0)), 100).await {
                             for guild in guilds {
                                 if let Ok(mut member) = ctx1.http.get_member(guild.id.into(), discord_id).await {

@@ -85,7 +85,7 @@ export const requestToken = async (eid: string) => {
  * @param discord_id User's Discord ID
  */
 export const becameVerified = async (discord_id: string) => {
-  const sqs = new SQS;
+  const sqs = new SQS();
   const _res = await sqs.sendMessage({
     QueueUrl: DISCORD_ID_SQS_URL,
     MessageBody: JSON.stringify({discord_id})

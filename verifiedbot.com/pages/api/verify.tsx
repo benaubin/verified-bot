@@ -69,8 +69,8 @@ const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
   });
 
   await tr.promise().then(async () => {
-    res.status(200).send(claims);
     await becameVerified(discord_id);
+    res.status(200).send(claims);
   }).catch((e) => {
     console.log(e, cancellationReasons!);
     res.status(403).send("UT EID or Discord account already verified.");
