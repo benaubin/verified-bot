@@ -59,8 +59,10 @@ export const setGuildRolesAttribute = async (guild_id: string, attribute: string
   }).promise() as any as GuildRoles;
 }
 
-const SQS_QueueUrl =
+const EID_SQS_URL =
   "https://sqs.us-east-1.amazonaws.com/402762806873/eid_verification_requests";
+const DISCORD_ID_SQS_URL =
+    "https://sqs.us-east-1.amazonaws.com/402762806873/on-verification-update";
 
 /**
  * Sends a UT EID to an S3 SQS message queue, so that the verification request will be performed
@@ -71,7 +73,21 @@ const SQS_QueueUrl =
 export const requestToken = async (eid: string) => {
   const sqs = new SQS();
   const _res = await sqs.sendMessage({
-    QueueUrl: SQS_QueueUrl,
+    QueueUrl: EID_SQS_URL,
     MessageBody: JSON.stringify({eid})
   }).promise();
 };
+
+/**
+ * Sends a Discord ID to an S3 SQS message queue, which will be picked up by the Discord Bot so it
+ * may update a user's server nickname and roles in every participating server.
+ *
+ * @param discord_id User's Discord ID
+ */
+export const becameVerified = async (discord_id: string) => {
+  const sqs = new SQS;
+  const _res = await sqs.sendMessage({
+    QueueUrl: DISCORD_ID_SQS_URL,
+    MessageBody: JSON.stringify({discord_id})
+  }).promise();
+}

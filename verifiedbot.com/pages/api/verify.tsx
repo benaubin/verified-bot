@@ -2,7 +2,7 @@ import { AWSError } from "aws-sdk";
 import { withIronSessionApiRoute } from "iron-session/next";
 import { NextApiHandler } from "next";
 import { ironOptions } from "../../lib/config";
-import { docClient } from "../../lib/db";
+import {becameVerified, docClient} from "../../lib/db";
 import { decodeToken } from "../../lib/token";
 import {getDiscordGuildsForUser, getGuildMember, setMemberNick} from "../../lib/discord";
 
@@ -70,15 +70,7 @@ const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
 
   await tr.promise().then(async () => {
     res.status(200).send(claims);
-    let guilds = await getDiscordGuildsForUser(process.env.DISCORD_BOT_TOKEN!, "Bot");
-    for (let partialGuild of guilds) {
-      try {
-        let guildMember = await getGuildMember(partialGuild.id, discord_id);
-        await setMemberNick(partialGuild.id, discord_id, guildMember.nick || guildMember.user.username + " ✓");
-      } catch (e) {
-        console.log(partialGuild.name, e);
-      }
-    }
+    await becameVerified(discord_id);
   }).catch((e) => {
     console.log(e, cancellationReasons!);
     res.status(403).send("UT EID or Discord account already verified.");
