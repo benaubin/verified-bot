@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aws-config = "0.4.0"
-aws-sdk-dynamodb = "0.4.0"
+aws-config = "0.5.2"
+aws-sdk-dynamodb = "0.5.2"
+aws-sdk-sqs = "0.5.2"
 tokio = { version = "1.0", features = ["full"] }
 serenity = { version="0.10", default-features = false, features = [ "builder", "client", "gateway", "rustls_backend", "http", "utils", "model", "unstable_discord_api"] }
 reqwest = { version = "0.11", features = ["json"] }

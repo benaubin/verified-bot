@@ -1,17 +1,18 @@
-mod handlers;
 mod db;
+mod handlers;
 
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::future::Future;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
-use serenity::model::guild::{
-    Guild, Member, PartialGuild, Role
-};
-use serenity::model::id::{
-    GuildId, RoleId, UserId,
-};
+use aws_sdk_sqs::model::DeleteMessageBatchRequestEntry;
+use serde::Deserialize;
+use serenity::http::GuildPagination;
+use serenity::model::guild::{Guild, Member, PartialGuild, Role};
+use serenity::model::id::{GuildId, RoleId, UserId};
 use serenity::model::prelude::application_command::ApplicationCommandInteraction;
 use serenity::{
     async_trait,
@@ -27,12 +28,16 @@ use serenity::{
     prelude::*,
 };
 
+const REQUESTS_PER_SECOND: i32 = 10;
+const SQS_BECOME_VERIFIED_REQUEST_URL: &'static str = "https://sqs.us-east-1.amazonaws.com/402762806873/on-verification-update";
+
 type IgnoreSet = Arc<tokio::sync::Mutex<HashSet<UserId>>>;
 
 struct Handler {
     db_client: &'static db::DynamoDB,
     // used to ignore an additional invocation of GuildMemberUpdateEvent
-    ignore_set: IgnoreSet
+    ignore_set: IgnoreSet,
+    background_task_running: AtomicBool,
 }
 
 /// Scans all users in the guild to check nickname compliance
@@ -55,8 +60,11 @@ async fn rescan(
         output = "You must be an administrator to run this command.".to_string();
     } else {
         output = match scan(user_db, guild, ctx.clone(), ignore_set.clone()).await {
-            Ok(n) => format!("Command Sent Successfully (should complete in {} seconds)", n),
-            Err(e) => format!("Command Failed: {}", e.to_string())
+            Ok(n) => format!(
+                "Command Sent Successfully (should complete in {} seconds)",
+                n
+            ),
+            Err(e) => format!("Command Failed: {}", e.to_string()),
         };
     }
     command
@@ -80,7 +88,7 @@ async fn scan(
     let mut guild_members = guild.members(&ctx.http, None, None).await?;
     let numbers = match guild_members.len() {
         1000 => "≥250".to_string(),
-        _ => format!("~{}", guild_members.len() / 10)
+        _ => format!("~{}", guild_members.len() / 10),
     };
     tokio::spawn(async move {
         let role_mappings = user_db.get_role_config(guild_id).await;
@@ -88,7 +96,14 @@ async fn scan(
         while guild_members.len() > 0 {
             let mut last_id = None;
             for mut member in &mut guild_members {
-                handle_member_status(user_db, &ctx, &mut member, &role_mappings, ignore_set.clone()).await;
+                handle_member_status(
+                    user_db,
+                    &ctx,
+                    &mut member,
+                    &role_mappings,
+                    ignore_set.clone(),
+                )
+                .await;
                 last_id = Some(member.user.id);
                 // sleep to stay far away from rate limit
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -100,9 +115,19 @@ async fn scan(
 }
 
 /// Modifies the name and roles of the user to either sanitize it or assign it the ✓
-async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut Member, role_mappings: &HashMap<String, u64>, ignore_set: IgnoreSet) -> bool {
+async fn handle_member_status(
+    db_client: &db::DynamoDB,
+    ctx: &Context,
+    mem: &mut Member,
+    role_mappings: &HashMap<String, u64>,
+    ignore_set: IgnoreSet,
+) -> bool {
     let original = mem.display_name().to_string();
-    let mut cleaned = mem.display_name().replace(|c: char| !c.is_ascii(), "").trim().to_string();
+    let mut cleaned = mem
+        .display_name()
+        .replace(|c: char| !c.is_ascii(), "")
+        .trim()
+        .to_string();
     if let Some(user_claims) = db_client.get_user(mem.user.id.into()).await {
         let mut roles_to_add = Vec::new();
         let mut user_tags = user_claims.affiliation.clone();
@@ -120,8 +145,7 @@ async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut
         }
         if user_claims.affiliation.contains(&"student".to_string()) {
             cleaned.push_str(" ✓");
-        }
-        else {
+        } else {
             return true;
         }
     }
@@ -138,12 +162,21 @@ async fn handle_member_status(db_client: &db::DynamoDB, ctx: &Context, mem: &mut
 #[async_trait]
 impl EventHandler for Handler {
     async fn guild_create(&self, ctx: Context, guild: Guild) {
-        scan(self.db_client, guild.id, ctx, self.ignore_set.clone()).await.unwrap();
+        scan(self.db_client, guild.id, ctx, self.ignore_set.clone())
+            .await
+            .unwrap();
     }
 
     async fn guild_member_addition(&self, ctx: Context, guild_id: GuildId, mut new_member: Member) {
         let role_mappings = self.db_client.get_role_config(guild_id).await;
-        handle_member_status(self.db_client, &ctx, &mut new_member, &role_mappings, self.ignore_set.clone()).await;
+        handle_member_status(
+            self.db_client,
+            &ctx,
+            &mut new_member,
+            &role_mappings,
+            self.ignore_set.clone(),
+        )
+        .await;
     }
 
     async fn guild_member_update(&self, ctx: Context, update: GuildMemberUpdateEvent) {
@@ -157,7 +190,14 @@ impl EventHandler for Handler {
         if let Ok(guild) = ctx.http.get_guild(update.guild_id.into()).await {
             let role_mappings = self.db_client.get_role_config(guild.id).await;
             if let Ok(mut member) = guild.member(&ctx.http, update.user.id).await {
-                handle_member_status(self.db_client, &ctx, &mut member, &role_mappings, self.ignore_set.clone()).await;
+                handle_member_status(
+                    self.db_client,
+                    &ctx,
+                    &mut member,
+                    &role_mappings,
+                    self.ignore_set.clone(),
+                )
+                .await;
             }
         }
     }
@@ -183,9 +223,9 @@ impl EventHandler for Handler {
                         .description("Learn more about the bot and its commands")
                 })
                 .create_application_command(|command| {
-                    command
-                        .name("rescan")
-                        .description("Check all users in the guild for nickname compliance and role assignment")
+                    command.name("rescan").description(
+                        "Check all users in the guild for nickname compliance and role assignment",
+                    )
                 })
         })
         .await;
@@ -194,6 +234,73 @@ impl EventHandler for Handler {
             "I now have the following global slash commands: {:#?}",
             commands
         );
+
+        let ctx = Arc::new(ctx);
+
+        if !self
+            .background_task_running
+            .fetch_or(true, Ordering::Relaxed)
+        {
+            let ctx1 = ctx.clone();
+
+            let dbc = self.db_client;
+            let igset = self.ignore_set.clone();
+            tokio::spawn(async move {
+                let config = aws_config::load_from_env().await;
+                let client = aws_sdk_sqs::Client::new(&config);
+
+                loop {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    println!("polling");
+
+                    let out = client
+                        .receive_message()
+                        .queue_url(SQS_BECOME_VERIFIED_REQUEST_URL)
+                        .max_number_of_messages(REQUESTS_PER_SECOND)
+                        .send()
+                        .await
+                        .unwrap();
+
+                    println!("{:#?}", out.messages);
+                    let messages = match out.messages {
+                        Some(msgs) => msgs,
+                        None => continue,
+                    };
+
+                    let mut entries = Vec::new();
+
+                    for msg in messages {
+                        let body = msg.body.expect("invalid message received");
+                        let req: BecomeVerifiedMessage =
+                            serde_json::from_str(&body).expect("invalid message received");
+                        let discord_id: u64 = req.discord_id.parse().unwrap_or(0);
+                        println!("Received: {}", discord_id);
+                        if let Ok(guilds) = ctx1.http.get_guilds(&GuildPagination::After(GuildId(0)), 100).await {
+                            for guild in guilds {
+                                if let Ok(mut member) = ctx1.http.get_member(guild.id.into(), discord_id).await {
+                                    let role_mappings = dbc.get_role_config(guild.id).await;
+                                    handle_member_status(dbc, &ctx1, &mut member, &role_mappings, igset.clone()).await;
+                                }
+                            }
+                        }
+                        entries.push(
+                            DeleteMessageBatchRequestEntry::builder()
+                                .set_id(Some(entries.len().to_string()))
+                                .set_receipt_handle(msg.receipt_handle)
+                                .build(),
+                        );
+                    }
+
+                    client
+                        .delete_message_batch()
+                        .queue_url(SQS_BECOME_VERIFIED_REQUEST_URL)
+                        .set_entries(Some(entries))
+                        .send()
+                        .await
+                        .unwrap();
+                }
+            });
+        }
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -201,7 +308,9 @@ impl EventHandler for Handler {
             if let Err(why) = match command.data.name.as_str() {
                 "verify" => handlers::verify(command, ctx).await,
                 "rescan" => match command.guild_id {
-                    Some(guild) => rescan(self.db_client, command, guild, ctx, self.ignore_set.clone()).await,
+                    Some(guild) => {
+                        rescan(self.db_client, command, guild, ctx, self.ignore_set.clone()).await
+                    }
                     None => {
                         command
                             .create_interaction_response(&ctx.http, |response| {
@@ -255,7 +364,11 @@ async fn main() {
     // Build our client.
     let mut client = Client::builder(token)
         .intents(GatewayIntents::GUILD_MEMBERS)
-        .event_handler(Handler { db_client, ignore_set })
+        .event_handler(Handler {
+            db_client,
+            ignore_set,
+            background_task_running: AtomicBool::new(false),
+        })
         .application_id(application_id)
         .await
         .expect("Error creating client");
@@ -267,4 +380,9 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("Client error: {:?}", why);
     }
+}
+
+#[derive(Deserialize)]
+struct BecomeVerifiedMessage {
+    discord_id: String
 }
