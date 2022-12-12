@@ -19,41 +19,29 @@ const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
     return;
   }
 
-  const payload = decodeToken(token);
-  if (!payload) {
-    res.status(401).send("Bad token");
-    return;
-  }
-
-  const { encrypted_eid: encrypted_eid_bytes, ...claims } = payload;
-  const encrypted_eid = Buffer.from(encrypted_eid_bytes);
-
   const tr = docClient.transactWrite({
     TransactItems: [
       {
-        Update: {
-          TableName: "ut_eids",
-          Key: {
-            encrypted_eid,
+          Delete: {
+            TableName: "qualtrics_tokens",
+            Key: {
+                token,
+            },
+            ConditionExpression: "valid = :valid",
+            ExpressionAttributeValues: {
+              ":valid": true,
+            },
           },
-          UpdateExpression: "set discord_id = :discord_id",
-          ConditionExpression:
-            "attribute_not_exists(discord_id) OR discord_id = :discord_id",
-          ExpressionAttributeValues: {
-            ":discord_id": discord_id,
-          },
-        },
       },
       {
         Update: {
           TableName: "users",
           Key: {
-            discord_id,
+            discord_id
           },
-          UpdateExpression:
-            "set encrypted_eid = :encrypted_eid, claims = :claims",
-          ConditionExpression: "attribute_not_exists(encrypted_eid)",
-          ExpressionAttributeValues: { ":encrypted_eid": encrypted_eid, ":claims": JSON.stringify(claims) },
+          UpdateExpression: "set verified = :verified",
+          ConditionExpression : "attribute_not_exists(discord_id)",
+          ExpressionAttributeValues: { ":verified": true },
         },
       },
     ],
@@ -70,12 +58,23 @@ const handler: NextApiHandler = withIronSessionApiRoute(async (req, res) => {
 
   await tr.promise().then(async () => {
     await becameVerified(discord_id);
-    res.status(200).send(claims);
+    res.status(200).send("Created.");
   }).catch((e) => {
     console.log(e, cancellationReasons!);
-    res.status(403).send("UT EID or Discord account already verified.");
+    if(cancellationReasons !== undefined) {
+        if(cancellationReasons.length > 1 && cancellationReasons[1].Code == "ConditionalCheckFailed") {
+            if(cancellationReasons![0].Code == "ConditionalCheckFailed") {
+                res.status(403).send("Discord account already verified and bad UT EID.");
+            } else {
+                res.status(403).send("Discord account already verified.");
+            }
+        } else if(cancellationReasons.length > 0 && cancellationReasons[0].Code == "ConditionalCheckFailed") {
+            res.status(403).send("Bad UT EID. Try signing in again.");
+        }
+    }
+    res.status(403).send("Server error.");
   });
-  
+
 }, ironOptions);
 
 export default handler;

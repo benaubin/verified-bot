@@ -37,13 +37,13 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
     getUser(discordAuth.id)
   ]);
 
-  if (dbUser?.claims) {
-    return {
-      redirect: {
-        statusCode: 303,
-        destination: "/app#",
-      },
-    };
+  if (dbUser !== undefined) {
+      return {
+          redirect: {
+              statusCode: 303,
+              destination: "/app#",
+          },
+      };
   }
 
   return {
@@ -53,6 +53,7 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
 
 const verify = async (token: string) => {
   const csrf_token = getCsrfToken();
+  token = token + "";
   return fetch("/api/verify", {
     method: "POST",
     headers: {
@@ -65,30 +66,22 @@ const verify = async (token: string) => {
   });
 }
 
-const token = typeof window === "undefined" ? null : window.location.hash.slice(1);
-if (token) {
-  window.history.replaceState({}, document.title, location.pathname);
-}
+
 
 export default function Verify({ discordUser }: Props) {
   const [claims, setClaims] = useState<ReadableClaims | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
+  let {qualtricsTokenId} = router.query;
 
   useEffect(() => {
-    if (!token) {
+    qualtricsTokenId = Array.isArray(qualtricsTokenId) ? qualtricsTokenId[0] : qualtricsTokenId;
+
+    if (!qualtricsTokenId) {
       router.push("/app");
       return;
     }
-
-    console.log(token);
-
-    const byteStr = atob(token.replaceAll("-", "+").replaceAll("_", "/"));
-    const buf = new Uint8Array(byteStr.length - 32);
-    for (let i = 0; i < buf.length; i++) buf[i] = byteStr.charCodeAt(i);
-    const [encrypted_eid, major, school, affiliation] = decode(buf) as [number[], String[], String[], String[]];
-    setClaims(readableClaims({ encrypted_eid, major, school, affiliation }));
   }, []);
 
   return (
@@ -160,14 +153,15 @@ export default function Verify({ discordUser }: Props) {
 
         {claims && <ClaimsData claims={claims}></ClaimsData>}
 
-        {message && <p>{message}</p>}
+        {message && <p className="error-text">{message}</p>}
 
         <p>
           <button
             disabled={loading}
             onClick={(e) => {
+              qualtricsTokenId = Array.isArray(qualtricsTokenId) ? qualtricsTokenId[0] : qualtricsTokenId;
               setLoading(true);
-              verify(token!)
+              verify(qualtricsTokenId!)
                 .then(async (res) => {
                   if (res.ok) {
                     router.push("/app#");
@@ -206,6 +200,9 @@ export default function Verify({ discordUser }: Props) {
           }
           .discriminator {
             font-weight: 300;
+          }
+          .error-text {
+            color: rgb(255,59,48);
           }
         `}</style>
       </main>
