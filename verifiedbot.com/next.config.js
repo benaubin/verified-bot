@@ -1,4 +1,11 @@
 /** @type {import('next').NextConfig} */
 module.exports = {
-  reactStrictMode: true,
+    webpack: (config, options) => {
+      config.experiments = {
+        asyncWebAssembly: true,
+        layers: true,
+      }
+      return config;
+    },
+    reactStrictMode: true
 }

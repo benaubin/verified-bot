@@ -12,11 +12,10 @@ import {
 } from "../lib/discord";
 import Link from "next/link";
 import { getCsrfToken } from "../lib/csrf";
-import ClaimsData, { readableClaims, ReadableClaims } from "../components/ClaimsData";
 
 interface Props {
   discordUser: DiscordUser;
-  claims: ReadableClaims | false;
+  isVerified: boolean;
   guilds: DiscordPartialGuild[];
 }
 
@@ -37,91 +36,28 @@ export const getServerSideProps = withIronSessionSsr(async (ctx) => {
     getDiscordGuildsForUser(discordAuth.token),
   ]);
 
-  const claims = user && user.claims ? JSON.parse(user.claims) : false;
+  const isVerified = user !== undefined && user !== null;
   return {
-    props: { discordUser, guilds, claims },
+    props: { discordUser, guilds,  isVerified},
   };
 }, ironOptions);
 
-const UtEIDForm = () => {
-  const [eid, setEid] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
+const VerificationForm = () => {
   return (
     <div>
-      <p>Enter your UT EID to verify your Discord account.</p>
-      {error && <p>{error}</p>}
-
-      {success ? (
-        <>
-          {success}{" "}
-          <a onClick={() => { setSuccess("") }} style={{cursor: "pointer"}}>Retry</a>.
-        </>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-
-            const csrf_token = getCsrfToken();
-
-            setLoading(true);
-
-            (async () => {
-              try {
-                const res = await fetch("/api/request-token", {
-                  method: "POST",
-                  headers: {
-                    "content-type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    eid,
-                    csrf_token,
-                  }),
-                });
-                if (res.ok) {
-                  setSuccess(await res.text());
-                  setError("");
-                } else {
-                  setSuccess("");
-                  setError(await res.text());
-                }
-              } catch (e) {
-                setError("Internal JavaScript error.");
-                throw e;
-              } finally {
-                setLoading(false);
-              }
-            })();
-
-            return false;
-          }}>
-          <input
-            disabled={loading}
-            type="text"
-            placeholder="UT EID"
-            value={eid}
-            onChange={(e) => {
-              setEid(e.target.value);
-            }}
-          />
-
-          <input
-            disabled={loading}
+        <p>Click the button below to verify your Discord account.</p>
+        <input
             type="submit"
-            value="Begin Verification"></input>
-        </form>
-      )}
-
-      <p>
-        <Link href="/#privacy">Privacy policy</Link>
-      </p>
+            onClick={()=>{window.location.href=process.env.NEXT_PUBLIC_QUALTRICS_URI}}
+            value="Begin Verification"/>
+        <p>
+            <Link href="/#privacy">Privacy policy</Link>
+        </p>
     </div>
   );
 };
 
-export default function App({ discordUser, claims, guilds }: Props) {
+export default function App({ discordUser, isVerified, guilds }: Props) {
   const managedGuilds = guilds.filter(
     (guild) =>
       (Number.parseInt(guild.permissions) & PERMISSIONS.MANAGE_GUILD) != 0
@@ -157,13 +93,12 @@ export default function App({ discordUser, claims, guilds }: Props) {
         </div>
 
         <div>
-          {claims ? (
+          {isVerified ? (
             <>
-              <h2>Your verified info:</h2>
-              <ClaimsData claims={claims}></ClaimsData>
+              <h2>You are verified!</h2>
             </>
           ) : (
-            <UtEIDForm />
+            <VerificationForm />
           )}
         </div>
 
